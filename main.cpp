@@ -317,6 +317,7 @@ public:
 		}
 		if (INPUT_DEBUG)
 		{
+			cerr << cases.size() << " cases readed" << endl;
 			cerr << "All inputs readed" << endl;
 		}
 	}
@@ -382,6 +383,17 @@ int main()
 			game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.opp_bots), 1));
 		}
 
+		if (game.my_matter >= 10)
+		{
+			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+			{
+				if (it->can_spawn)
+				{
+					game.register_action(new ActionSpawn(it->pos, 1));
+					break;
+				}
+			}
+		}
 		game.execute_actions();
 	}
 }
