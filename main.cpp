@@ -510,6 +510,28 @@ bool isCaseUsefulForRecycler(Game &game, Position pos)
 	return true;
 }
 
+vector<Case> adajcent(Case &src, Game &game)
+{
+	vector<Case> result;
+	if (src.pos.x > 0)
+	{
+		result.push_back(game.get_case(src.pos.x - 1, src.pos.y));
+	}
+	if (src.pos.x < game.width - 1)
+	{
+		result.push_back(game.get_case(src.pos.x + 1, src.pos.y));
+	}
+	if (src.pos.y > 0)
+	{
+		result.push_back(game.get_case(src.pos.x, src.pos.y - 1));
+	}
+	if (src.pos.y < game.height - 1)
+	{
+		result.push_back(game.get_case(src.pos.x, src.pos.y + 1));
+	}
+	return result;
+}
+
 /*=======================================================================
 ||                                                                     ||
 ||                           Main Function                             ||
@@ -581,10 +603,32 @@ int main()
 			{
 				if (it->can_spawn)
 				{
-					dests.push_back(*it);
+					vector<Case> adj = adajcent(*it, game);
+					for (auto it2 = adj.begin(); it2 != adj.end(); it2++)
+					{
+						if (it2->owner != PLAYER_ME)
+						{
+							dests.push_back(*it);
+							break;
+						}
+					}
 				}
 			}
-			game.register_action(new ActionSpawn(dests[rand() % dests.size()].pos, 1));
+			if (dests.size() > 0)
+				game.register_action(new ActionSpawn(dests[rand() % dests.size()].pos, 1));
+			else
+			{
+				dests.clear();
+				for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+				{
+					if (it->can_spawn)
+					{
+						dests.push_back(*it);
+					}
+				}
+				if (dests.size() > 0)
+					game.register_action(new ActionSpawn(dests[rand() % dests.size()].pos, 1));
+			}
 		}
 
 		game.execute_actions();
