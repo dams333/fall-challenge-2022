@@ -5,6 +5,13 @@
 
 using namespace std;
 
+#define BOT_DEBUG 0
+#define INPUT_DEBUG 0
+
+/*=======================================================================
+||                        Classes declaration                          ||
+=======================================================================*/
+
 enum Player
 {
 	PLAYER_NONE = -1,
@@ -25,6 +32,22 @@ Player convertToPlayer(int p)
 	else
 	{
 		return PLAYER_NONE;
+	}
+}
+
+string playerToType(Player &p)
+{
+	if (p == PLAYER_ME)
+	{
+		return "ME";
+	}
+	else if (p == PLAYER_OPPONENT)
+	{
+		return "OPPONENT";
+	}
+	else
+	{
+		return "NONE";
 	}
 }
 
@@ -52,6 +75,10 @@ public:
 		x = other.x;
 		y = other.y;
 		return *this;
+	}
+	int distance(Position other)
+	{
+		return abs(x - other.x) + abs(y - other.y);
 	}
 };
 
@@ -104,6 +131,8 @@ public:
 	{
 		this->pos = pos;
 		this->owner = owner;
+		if (BOT_DEBUG)
+			cerr << "Bot created at " << pos.x << " " << pos.y << " for: " << playerToType(owner) << endl;
 	}
 	Bot(const Bot &other)
 	{
@@ -115,12 +144,15 @@ public:
 		owner = other.owner;
 		return *this;
 	}
+	int distance(Bot &other)
+	{
+		return pos.distance(other.pos);
+	}
 };
 
 class AAction
 {
 public:
-	virtual ~AAction() = 0;
 	virtual string extractString() = 0;
 };
 
@@ -203,9 +235,10 @@ public:
 		{
 			for (auto it = actions.begin(); it != actions.end(); it++)
 			{
-				cout << (it == actions.begin() ? "" : ";") << (*it)->extractString() << endl;
+				cout << (it == actions.begin() ? "" : ";") << (*it)->extractString();
 				delete *it;
 			}
+			cout << endl;
 		}
 		else
 		{
@@ -220,8 +253,11 @@ class Game
 public:
 	int width;
 	int height;
+
 	int my_matter;
 	int opp_matter;
+
+	list<Case> cases;
 	list<list<Case>> map;
 	list<Bot> my_bots;
 	list<Bot> opp_bots;
@@ -235,9 +271,11 @@ public:
 
 	void read_inputs()
 	{
+		cases.clear();
 		map.clear();
 		my_bots.clear();
 		opp_bots.clear();
+
 		cin >> my_matter >> opp_matter;
 		cin.ignore();
 		for (int i = 0; i < height; i++)
@@ -257,19 +295,29 @@ public:
 				{
 					map.push_back(list<Case>());
 				}
-				map.back().push_back(Case(Position(i, j), scrap_amount, convertToPlayer(owner), units, recycler, can_build, can_spawn, in_range_of_recycler));
+				Case c = Case(Position(j, i), scrap_amount, convertToPlayer(owner), units, recycler, can_build, can_spawn, in_range_of_recycler);
+				if (INPUT_DEBUG)
+				{
+					cerr << "Read case " << c.pos.x << " " << c.pos.y << endl;
+				}
+				map.back().push_back(c);
+				cases.push_back(c);
 				for (int i = 0; i < units; i++)
 				{
-					if (owner == 0)
+					if (owner == PLAYER_ME)
 					{
-						my_bots.push_back(Bot(Position(i, j), convertToPlayer(owner)));
+						my_bots.push_back(Bot(c.pos, convertToPlayer(owner)));
 					}
-					else
+					else if (owner == PLAYER_OPPONENT)
 					{
-						opp_bots.push_back(Bot(Position(i, j), convertToPlayer(owner)));
+						opp_bots.push_back(Bot(c.pos, convertToPlayer(owner)));
 					}
 				}
 			}
+		}
+		if (INPUT_DEBUG)
+		{
+			cerr << "All inputs readed" << endl;
 		}
 	}
 
@@ -283,18 +331,56 @@ public:
 	}
 };
 
+/*=======================================================================
+||                          Utils functions                            ||
+=======================================================================*/
+
+Position get_nearest(Position from, list<Bot> targets)
+{
+	if (targets.size() == 0)
+	{
+		return from;
+	}
+	Position nearest = targets.front().pos;
+	int nearest_distance = from.distance(nearest);
+	for (auto it = targets.begin(); it != targets.end(); it++)
+	{
+		int distance = from.distance(it->pos);
+		if (distance < nearest_distance)
+		{
+			nearest = it->pos;
+			nearest_distance = distance;
+		}
+	}
+	return nearest;
+}
+
+/*=======================================================================
+||                           Main Function                             ||
+=======================================================================*/
+
 int main()
 {
 	int width;
 	int height;
 	cin >> width >> height;
 	cin.ignore();
+	if (INPUT_DEBUG)
+	{
+		cerr << "Readed initialization inputs" << endl;
+	}
 
 	Game game(width, height);
 
-	while (1)
+	int turn = 0;
+	while (++turn)
 	{
 		game.read_inputs();
+
+		for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
+		{
+			game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.opp_bots), 1));
+		}
 
 		game.execute_actions();
 	}
