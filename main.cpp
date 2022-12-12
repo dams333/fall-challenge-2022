@@ -154,6 +154,7 @@ class AAction
 {
 public:
 	virtual string extractString() = 0;
+	virtual int matterRemove() = 0;
 };
 
 class ActionMove : public AAction
@@ -172,6 +173,10 @@ public:
 	{
 		return "MOVE " + to_string(amount_of_units) + " " + to_string(from.x) + " " + to_string(from.y) + " " + to_string(to.x) + " " + to_string(to.y);
 	}
+	int matterRemove()
+	{
+		return 0;
+	}
 };
 
 class ActionBuildRecycler : public AAction
@@ -185,6 +190,10 @@ public:
 	string extractString()
 	{
 		return "BUILD " + to_string(pos.x) + " " + to_string(pos.y);
+	}
+	int matterRemove()
+	{
+		return 10;
 	}
 };
 
@@ -202,6 +211,10 @@ public:
 	{
 		return "SPAWN " + to_string(amount_of_units) + " " + to_string(pos.x) + " " + to_string(pos.y);
 	}
+	int matterRemove()
+	{
+		return 10;
+	}
 };
 
 class ActionMessage : public AAction
@@ -216,36 +229,20 @@ public:
 	{
 		return "MSG " + message;
 	}
+	int matterRemove()
+	{
+		return 0;
+	}
 };
 
 class Game;
-
 class ActionManager
 {
 public:
 	list<AAction *> actions;
-	ActionManager() {}
-	void addAction(AAction *action)
-	{
-		actions.push_back(action);
-	}
-	void execute(Game &map)
-	{
-		if (actions.size() > 0)
-		{
-			for (auto it = actions.begin(); it != actions.end(); it++)
-			{
-				cout << (it == actions.begin() ? "" : ";") << (*it)->extractString();
-				delete *it;
-			}
-			cout << endl;
-		}
-		else
-		{
-			cout << "WAIT" << endl;
-		}
-		actions.clear();
-	}
+	ActionManager();
+	void addAction(Game *game, AAction *action);
+	void execute();
 };
 
 class Game
@@ -253,84 +250,110 @@ class Game
 public:
 	int width;
 	int height;
-
 	int my_matter;
 	int opp_matter;
-
 	list<Case> cases;
 	list<list<Case>> map;
 	list<Bot> my_bots;
 	list<Bot> opp_bots;
 	ActionManager action_manager;
+	Game(int width, int height);
+	void read_inputs();
+	void register_action(AAction *action);
+	void execute_actions();
+};
 
-	Game(int width, int height)
+ActionManager::ActionManager() {}
+void ActionManager::addAction(Game *game, AAction *action)
+{
+	game->my_matter -= action->matterRemove();
+	actions.push_back(action);
+}
+void ActionManager::execute()
+{
+	if (actions.size() > 0)
 	{
-		this->width = width;
-		this->height = height;
-	}
-
-	void read_inputs()
-	{
-		cases.clear();
-		map.clear();
-		my_bots.clear();
-		opp_bots.clear();
-
-		cin >> my_matter >> opp_matter;
-		cin.ignore();
-		for (int i = 0; i < height; i++)
+		for (auto it = actions.begin(); it != actions.end(); it++)
 		{
-			for (int j = 0; j < width; j++)
+			cout << (it == actions.begin() ? "" : ";") << (*it)->extractString();
+			delete *it;
+		}
+		cout << endl;
+	}
+	else
+	{
+		cout << "WAIT" << endl;
+	}
+	actions.clear();
+}
+
+Game::Game(int width, int height)
+{
+	this->width = width;
+	this->height = height;
+}
+
+void Game::read_inputs()
+{
+	cases.clear();
+	map.clear();
+	my_bots.clear();
+	opp_bots.clear();
+
+	cin >> my_matter >> opp_matter;
+	cin.ignore();
+	for (int i = 0; i < height; i++)
+	{
+		for (int j = 0; j < width; j++)
+		{
+			int scrap_amount;
+			int owner;
+			int units;
+			int recycler;
+			int can_build;
+			int can_spawn;
+			int in_range_of_recycler;
+			cin >> scrap_amount >> owner >> units >> recycler >> can_build >> can_spawn >> in_range_of_recycler;
+			cin.ignore();
+			if (i == 0)
 			{
-				int scrap_amount;
-				int owner;
-				int units;
-				int recycler;
-				int can_build;
-				int can_spawn;
-				int in_range_of_recycler;
-				cin >> scrap_amount >> owner >> units >> recycler >> can_build >> can_spawn >> in_range_of_recycler;
-				cin.ignore();
-				if (i == 0)
+				map.push_back(list<Case>());
+			}
+			Case c = Case(Position(j, i), scrap_amount, convertToPlayer(owner), units, recycler, can_build, can_spawn, in_range_of_recycler);
+			if (INPUT_DEBUG)
+			{
+				cerr << "Read case " << c.pos.x << " " << c.pos.y << endl;
+			}
+			map.back().push_back(c);
+			cases.push_back(c);
+			for (int i = 0; i < units; i++)
+			{
+				if (owner == PLAYER_ME)
 				{
-					map.push_back(list<Case>());
+					my_bots.push_back(Bot(c.pos, convertToPlayer(owner)));
 				}
-				Case c = Case(Position(j, i), scrap_amount, convertToPlayer(owner), units, recycler, can_build, can_spawn, in_range_of_recycler);
-				if (INPUT_DEBUG)
+				else if (owner == PLAYER_OPPONENT)
 				{
-					cerr << "Read case " << c.pos.x << " " << c.pos.y << endl;
-				}
-				map.back().push_back(c);
-				cases.push_back(c);
-				for (int i = 0; i < units; i++)
-				{
-					if (owner == PLAYER_ME)
-					{
-						my_bots.push_back(Bot(c.pos, convertToPlayer(owner)));
-					}
-					else if (owner == PLAYER_OPPONENT)
-					{
-						opp_bots.push_back(Bot(c.pos, convertToPlayer(owner)));
-					}
+					opp_bots.push_back(Bot(c.pos, convertToPlayer(owner)));
 				}
 			}
 		}
-		if (INPUT_DEBUG)
-		{
-			cerr << cases.size() << " cases readed" << endl;
-			cerr << "All inputs readed" << endl;
-		}
 	}
+	if (INPUT_DEBUG)
+	{
+		cerr << cases.size() << " cases readed" << endl;
+		cerr << "All inputs readed" << endl;
+	}
+}
 
-	void register_action(AAction *action)
-	{
-		action_manager.addAction(action);
-	}
-	void execute_actions()
-	{
-		action_manager.execute(*this);
-	}
-};
+void Game::register_action(AAction *action)
+{
+	action_manager.addAction(this, action);
+}
+void Game::execute_actions()
+{
+	action_manager.execute();
+}
 
 /*=======================================================================
 ||                          Utils functions                            ||
@@ -383,7 +406,7 @@ int main()
 			game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.opp_bots), 1));
 		}
 
-		if (game.my_matter >= 10)
+		if (game.my_matter >= 30)
 		{
 			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 			{
@@ -394,6 +417,19 @@ int main()
 				}
 			}
 		}
+
+		if (game.my_matter >= 20)
+		{
+			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+			{
+				if (it->can_build)
+				{
+					game.register_action(new ActionBuildRecycler(it->pos));
+					break;
+				}
+			}
+		}
+
 		game.execute_actions();
 	}
 }
