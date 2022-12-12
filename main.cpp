@@ -89,6 +89,10 @@ public:
 	{
 		return abs(x - other.x) + abs(y - other.y);
 	}
+	bool operator==(const Position &other) const
+	{
+		return x == other.x && y == other.y;
+	}
 };
 
 /*=======================================================================
@@ -131,6 +135,10 @@ public:
 		can_spawn = other.can_spawn;
 		in_range_of_recycler = other.in_range_of_recycler;
 		return *this;
+	}
+	bool operator==(const Case &other) const
+	{
+		return pos == other.pos;
 	}
 };
 
@@ -375,6 +383,7 @@ void Game::register_action(AAction *action)
 {
 	action_manager.addAction(this, action);
 }
+
 void Game::execute_actions()
 {
 	action_manager.execute();
@@ -412,6 +421,28 @@ Position get_nearest(Position from, vector<Bot> targets)
 			nearest = it->pos;
 			nearest_distance = distance;
 		}
+	}
+	return nearest;
+}
+
+Position get_nearest(Position from, vector<Case> targets)
+{
+	if (targets.size() == 0)
+	{
+		return from;
+	}
+	Position nearest = targets.front().pos;
+	int nearest_distance = from.distance(nearest);
+	while (targets.size() > 0)
+	{
+		Case c = targets[rand() % targets.size()];
+		int distance = from.distance(c.pos);
+		if (distance < nearest_distance)
+		{
+			nearest = c.pos;
+			nearest_distance = distance;
+		}
+		targets.erase(find(targets.begin(), targets.end(), c));
 	}
 	return nearest;
 }
@@ -503,9 +534,31 @@ int main()
 	{
 		game.read_inputs();
 
+		vector<Case> not_mine;
+		for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+		{
+			if (it->owner != PLAYER_ME)
+			{
+				not_mine.push_back(*it);
+			}
+		}
 		for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
 		{
-			game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.opp_bots), 1));
+			if (not_mine.size() > 0)
+			{
+				Position nearest = get_nearest(it->pos, not_mine);
+				for (auto it2 = not_mine.begin(); it2 != not_mine.end(); it2++)
+				{
+					if (it2->pos == nearest)
+					{
+						not_mine.erase(it2);
+						break;
+					}
+				}
+				game.register_action(new ActionMove(it->pos, nearest, 1));
+			}
+			else
+				game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.cases), 1));
 		}
 
 		if (game.my_matter >= 10)
@@ -520,16 +573,18 @@ int main()
 			}
 		}
 
-		if (game.my_matter >= 20)
+		int needed = 0;
+		while (game.my_matter >= (needed += 10))
 		{
+			vector<Case> dests;
 			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 			{
 				if (it->can_spawn)
 				{
-					game.register_action(new ActionSpawn(it->pos, 1));
-					break;
+					dests.push_back(*it);
 				}
 			}
+			game.register_action(new ActionSpawn(dests[rand() % dests.size()].pos, 1));
 		}
 
 		game.execute_actions();
