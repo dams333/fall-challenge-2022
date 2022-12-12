@@ -1,12 +1,13 @@
 #include <iostream>
 #include <string>
-#include <list>
+#include <vector>
 #include <algorithm>
 
 using namespace std;
 
 #define BOT_DEBUG 0
 #define INPUT_DEBUG 0
+#define RECYCLER_DEBUG 0
 
 /*=======================================================================
 ||                        Classes declaration                          ||
@@ -239,7 +240,7 @@ class Game;
 class ActionManager
 {
 public:
-	list<AAction *> actions;
+	vector<AAction *> actions;
 	ActionManager();
 	void addAction(Game *game, AAction *action);
 	void execute();
@@ -252,15 +253,16 @@ public:
 	int height;
 	int my_matter;
 	int opp_matter;
-	list<Case> cases;
-	list<list<Case>> map;
-	list<Bot> my_bots;
-	list<Bot> opp_bots;
+	vector<Case> cases;
+	vector<Bot> my_bots;
+	vector<Bot> opp_bots;
 	ActionManager action_manager;
 	Game(int width, int height);
 	void read_inputs();
 	void register_action(AAction *action);
 	void execute_actions();
+	Case &get_case(Position pos);
+	Case &get_case(int x, int y);
 };
 
 ActionManager::ActionManager() {}
@@ -296,7 +298,6 @@ Game::Game(int width, int height)
 void Game::read_inputs()
 {
 	cases.clear();
-	map.clear();
 	my_bots.clear();
 	opp_bots.clear();
 
@@ -315,16 +316,11 @@ void Game::read_inputs()
 			int in_range_of_recycler;
 			cin >> scrap_amount >> owner >> units >> recycler >> can_build >> can_spawn >> in_range_of_recycler;
 			cin.ignore();
-			if (i == 0)
-			{
-				map.push_back(list<Case>());
-			}
 			Case c = Case(Position(j, i), scrap_amount, convertToPlayer(owner), units, recycler, can_build, can_spawn, in_range_of_recycler);
 			if (INPUT_DEBUG)
 			{
 				cerr << "Read case " << c.pos.x << " " << c.pos.y << endl;
 			}
-			map.back().push_back(c);
 			cases.push_back(c);
 			for (int i = 0; i < units; i++)
 			{
@@ -355,11 +351,21 @@ void Game::execute_actions()
 	action_manager.execute();
 }
 
+Case &Game::get_case(Position pos)
+{
+	return cases[pos.y * width + pos.x];
+}
+
+Case &Game::get_case(int x, int y)
+{
+	return get_case(Position(x, y));
+}
+
 /*=======================================================================
 ||                          Utils functions                            ||
 =======================================================================*/
 
-Position get_nearest(Position from, list<Bot> targets)
+Position get_nearest(Position from, vector<Bot> targets)
 {
 	if (targets.size() == 0)
 	{
@@ -377,6 +383,69 @@ Position get_nearest(Position from, list<Bot> targets)
 		}
 	}
 	return nearest;
+}
+
+bool isCaseUsefulForRecycler(Game &game, Position pos)
+{
+	if (RECYCLER_DEBUG)
+		cerr << "Test case " << pos.x << " " << pos.y << " for recycler: ";
+	if (pos.x < 1 || pos.x > game.width - 2 || pos.y < 1 || pos.y > game.height - 2)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "out of map" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x, pos.y - 1).scrap_amount <= 0)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "no scrap on top" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x, pos.y + 1).scrap_amount <= 0)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "no scrap on bottom" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x - 1, pos.y).scrap_amount <= 0)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "no scrap on left" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x + 1, pos.y).scrap_amount <= 0)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "no scrap on right" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x, pos.y - 1).in_range_of_recycler)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "on top is already recycled" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x, pos.y + 1).in_range_of_recycler)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "on bottome is already recycled" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x - 1, pos.y).in_range_of_recycler)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "on left is already recycled" << endl;
+		return false;
+	}
+	if (game.get_case(pos.x + 1, pos.y).in_range_of_recycler)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "on right is already recycled" << endl;
+		return false;
+	}
+	if (RECYCLER_DEBUG)
+		cerr << "valid" << endl;
+	return true;
 }
 
 /*=======================================================================
@@ -406,13 +475,13 @@ int main()
 			game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.opp_bots), 1));
 		}
 
-		if (game.my_matter >= 30)
+		if (game.my_matter >= 10)
 		{
 			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 			{
-				if (it->can_spawn)
+				if (it->can_build && isCaseUsefulForRecycler(game, it->pos))
 				{
-					game.register_action(new ActionSpawn(it->pos, 1));
+					game.register_action(new ActionBuildRecycler(it->pos));
 					break;
 				}
 			}
@@ -422,9 +491,9 @@ int main()
 		{
 			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 			{
-				if (it->can_build)
+				if (it->can_spawn)
 				{
-					game.register_action(new ActionBuildRecycler(it->pos));
+					game.register_action(new ActionSpawn(it->pos, 1));
 					break;
 				}
 			}
