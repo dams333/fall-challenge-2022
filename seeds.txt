@@ -1,0 +1,6 @@
+Study expand:
+seed=3071590062578990000
+https://www.codingame.com/replay/678052557
+
+seed=5433838718708682000
+https://www.codingame.com/share-replay/678053895

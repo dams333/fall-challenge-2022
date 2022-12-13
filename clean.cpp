@@ -9,7 +9,6 @@ using namespace std;
 #define INPUT_DEBUG 0
 #define RECYCLER_DEBUG 0
 #define SPAWN_DEBUG 0
-#define EXPAND_DEBUG 1
 
 /*=======================================================================
 ||                                                                     ||
@@ -255,7 +254,7 @@ public:
 	}
 	string extractString()
 	{
-		return "MESSAGE " + message;
+		return "MSG " + message;
 	}
 	int matterRemove()
 	{
@@ -586,187 +585,6 @@ vector<Case> other_cases(Game &game)
 	return result;
 }
 
-void init_recycler(Game &game)
-{
-	if (game.get_case(game.my_bots[0].pos.x, game.my_bots[0].pos.y + 1).scrap_amount >= 8)
-	{
-		game.register_action(new ActionBuildRecycler(Position(game.my_bots[0].pos.x, game.my_bots[0].pos.y + 1)));
-	}
-}
-
-bool is_bot_on_line(Game &game, int height)
-{
-	for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
-	{
-		if (it->pos.y == height)
-		{
-			return true;
-		}
-	}
-}
-
-Bot &get_most_advanced_on_line(Game &game, int direction, int height)
-{
-	vector<Bot *> onLine;
-	for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
-	{
-		if (it->pos.y == height)
-		{
-			onLine.push_back(&(*it));
-		}
-	}
-	if (onLine.size() == 1)
-	{
-		return *onLine.front();
-	}
-	else
-	{
-		if (direction == -1)
-		{
-			return *onLine.front();
-		}
-		else
-		{
-			return *onLine.back();
-		}
-	}
-}
-
-int line_with_bot_in(Game &game, int src, int direction)
-{
-	int result = 0;
-	for (int i = src; i >= 0 && i < game.height; i += direction)
-	{
-		if (is_bot_on_line(game, i))
-		{
-			result++;
-		}
-	}
-	return result;
-}
-
-bool is_line_with_no_bot_in(Game &game, int src, int direction)
-{
-	for (int i = src; i >= 0 && i < game.height; i += direction)
-	{
-		if (!is_bot_on_line(game, i))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-void expand(Game &game, int direction, int spawnHeight)
-{
-	game.register_action(new ActionMessage("expand to " + to_string(direction)));
-
-	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
-	{
-		if (it->owner == PLAYER_ME && it->can_build && game.my_matter >= 10)
-		{
-			vector<Case> adj = adajcent(*it, game);
-			for (auto it2 = adj.begin(); it2 != adj.end(); it2++)
-			{
-				if (it2->owner == PLAYER_OPPONENT && it2->units > 0)
-				{
-					game.register_action(new ActionBuildRecycler(it->pos));
-				}
-			}
-		}
-	}
-
-	for (int h = 0; h < game.height; h++)
-	{
-		if (is_bot_on_line(game, h))
-		{
-			Bot &director = get_most_advanced_on_line(game, direction, h);
-			Position target = Position(director.pos.x + direction, director.pos.y);
-			// Director try to go right straight
-			if (game.get_case(target).scrap_amount > 0 && game.get_case(target).recycler <= 0)
-				game.register_action(new ActionMove(director.pos, target, 1));
-			else
-			{
-				if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
-				{
-					// More bots on the bottom, better is to go top
-					if (is_line_with_no_bot_in(game, h, -1))
-					{
-						// There is a needed line in the top, go to top
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y - 1), 1));
-					}
-					else
-					{
-						// There is no needed line in the top, go to bottom
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y + 1), 1));
-					}
-				}
-				else
-				{
-					// More bots on the top, better is to go bottom
-					if (is_line_with_no_bot_in(game, h, 1))
-					{
-						// There is a needed line in the bottom, go to bottom
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y + 1), 1));
-					}
-					else
-					{
-						// There is no needed line in the bottom, go to top
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y - 1), 1));
-					}
-				}
-			}
-			for (int w = director.pos.x; w >= 0 && w < game.width; w -= direction)
-			{
-				int usable = game.get_case(w, h).owner == PLAYER_ME ? game.get_case(w, h).units : 0;
-				if (w == director.pos.x)
-				{
-					usable -= 1;
-				}
-				if (usable > 0)
-				{
-					int heightDir;
-					if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
-					{
-						// More bots on the bottom, better is to go top
-						if (is_line_with_no_bot_in(game, h, -1))
-						{
-							// There is a needed line in the top, go to top
-							game.register_action(new ActionMove(Position(w, h), Position(w, h - 1), 1));
-						}
-						else
-						{
-							// There is no needed line in the top, go to bottom
-							game.register_action(new ActionMove(Position(w, h), Position(w, h + 1), 1));
-						}
-					}
-					else
-					{
-						// More bots on the top, better is to go bottom
-						if (is_line_with_no_bot_in(game, h, 1))
-						{
-							// There is a needed line in the bottom, go to bottom
-							game.register_action(new ActionMove(Position(w, h), Position(w, h + 1), 1));
-						}
-						else
-						{
-							// There is no needed line in the bottom, go to top
-							game.register_action(new ActionMove(Position(w, h), Position(w, h - 1), 1));
-						}
-					}
-				}
-			}
-			if (abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1)) <= 1)
-			{
-				if (game.my_bots.size() < game.height)
-				{
-					game.register_action(new ActionSpawn(director.pos, 1));
-				}
-			}
-		}
-	}
-}
-
 /*=======================================================================
 ||                                                                     ||
 ||                           Main Function                             ||
@@ -786,31 +604,11 @@ int main()
 
 	Game game(width, height);
 
-	game.read_inputs();
-
-	Position myBase;
-	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
-	{
-		if (it->owner == PLAYER_ME)
-		{
-			myBase = it->pos;
-			break;
-		}
-	}
-
-	int direction = myBase.x > game.width / 2 ? -1 : 1;
-	int spawnHeight = myBase.y + 1;
-
-	// init_recycler(game);
-	expand(game, direction, spawnHeight);
-
-	game.execute_actions();
-
-	int turn = 1;
+	int turn = 0;
 	while (++turn)
 	{
 		game.read_inputs();
-		expand(game, direction, spawnHeight);
+
 		game.execute_actions();
 	}
 }
