@@ -9,7 +9,8 @@ using namespace std;
 #define INPUT_DEBUG 0
 #define RECYCLER_DEBUG 0
 #define SPAWN_DEBUG 0
-#define EXPAND_DEBUG 1
+#define EXPAND_DEBUG 0
+#define TERRITORY_DEBUG 0
 
 /*=======================================================================
 ||                                                                     ||
@@ -58,6 +59,15 @@ string playerToType(Player &p)
 		return "NONE";
 	}
 }
+
+/*=======================================================================
+||                                Mode                                ||
+=======================================================================*/
+enum Mode
+{
+	EXPAND,
+	SPLATOON
+};
 
 /*=======================================================================
 ||                              Position                               ||
@@ -279,6 +289,7 @@ public:
 /*=======================================================================
 ||                           Game prototype                            ||
 =======================================================================*/
+class Teritory;
 class Game
 {
 public:
@@ -297,6 +308,24 @@ public:
 	void execute_actions();
 	Case &get_case(Position pos);
 	Case &get_case(int x, int y);
+	vector<Teritory> get_teritories();
+};
+
+/*=======================================================================
+||                         Territory prototype                         ||
+=======================================================================*/
+class Teritory
+{
+public:
+	vector<Case> cases;
+	Teritory();
+	Teritory(const Teritory &t);
+	void operator=(const Teritory &t);
+	void add_case(Case c);
+	bool is_in(Position pos);
+	bool is_in(Case c);
+	void addCaseAndNeighbours(Game &game, Case &c);
+	void buildFrom(Game &game, Case &c);
 };
 
 /*=======================================================================
@@ -421,13 +450,102 @@ void Game::register_spawn_remove_move(ActionSpawn *action)
 	action_manager.addAction(this, action);
 }
 
+vector<Teritory> Game::get_teritories()
+{
+	vector<Teritory> territories;
+
+	for (auto it = cases.begin(); it != cases.end(); it++)
+	{
+		if (it->scrap_amount > 0)
+		{
+			bool found = false;
+			for (auto it2 = territories.begin(); it2 != territories.end(); it2++)
+			{
+				if (it2->is_in(*it))
+				{
+					found = true;
+					break;
+				}
+			}
+			if (found)
+				continue;
+			Teritory t = Teritory();
+			t.buildFrom(*this, *it);
+			territories.push_back(t);
+		}
+	}
+	if (TERRITORY_DEBUG)
+	{
+		for (auto it = territories.begin(); it != territories.end(); it++)
+		{
+			cerr << "Territory at " << it->cases[0].pos.x << " " << it->cases[0].pos.y << " with " << it->cases.size() << " cases" << endl;
+		}
+	}
+	return territories;
+}
+
+/*=======================================================================
+||                         Territory declaration                       ||
+=======================================================================*/
+
+Teritory::Teritory() {}
+
+Teritory::Teritory(const Teritory &t) : cases(t.cases) {}
+
+void Teritory::operator=(const Teritory &t)
+{
+	cases = t.cases;
+}
+
+void Teritory::add_case(Case c)
+{
+	cases.push_back(c);
+}
+
+bool Teritory::is_in(Position pos)
+{
+	for (auto it = cases.begin(); it != cases.end(); it++)
+	{
+		if (it->pos == pos)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Teritory::is_in(Case c)
+{
+	return is_in(c.pos);
+}
+
+void Teritory::addCaseAndNeighbours(Game &game, Case &c)
+{
+	add_case(c);
+	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+	{
+		if (it->pos.distance(c.pos) == 1 && it->scrap_amount > 0 && !is_in(*it))
+		{
+			addCaseAndNeighbours(game, *it);
+		}
+	}
+}
+
+void Teritory::buildFrom(Game &game, Case &c)
+{
+	if (TERRITORY_DEBUG)
+		cerr << "Building territory from " << c.pos.x << " " << c.pos.y << endl;
+	addCaseAndNeighbours(game, c);
+}
+
 /*=======================================================================
 ||                                                                     ||
 ||                          Utils functions                            ||
 ||                                                                     ||
 =======================================================================*/
 
-Position get_nearest(Position from, vector<Bot> targets)
+Position
+get_nearest(Position from, vector<Bot> targets)
 {
 	if (targets.size() == 0)
 	{
@@ -664,7 +782,7 @@ void expand(Game &game, int direction, int spawnHeight)
 	// Build recycler to block ennemy
 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 	{
-		if (it->owner == PLAYER_ME && it->can_build && game.my_matter >= 10)
+		if (it->owner == PLAYER_ME && it->can_build && game.my_matter >= 10 && it->recycler <= 0)
 		{
 			vector<Case> adj = adajcent(*it, game);
 			for (auto it2 = adj.begin(); it2 != adj.end(); it2++)
@@ -771,6 +889,16 @@ void expand(Game &game, int direction, int spawnHeight)
 	}
 }
 
+void splatoon(Game &game)
+{
+}
+
+bool isAllIsolate(Game &game)
+{
+	vector<Teritory> teritories = game.get_teritories();
+	return false;
+}
+
 /*=======================================================================
 ||                                                                     ||
 ||                           Main Function                             ||
@@ -781,6 +909,7 @@ int main()
 {
 	int width;
 	int height;
+	Mode mode = EXPAND;
 	cin >> width >> height;
 	cin.ignore();
 	if (INPUT_DEBUG)
@@ -805,7 +934,6 @@ int main()
 	int direction = myBase.x > game.width / 2 ? -1 : 1;
 	int spawnHeight = myBase.y + 1;
 
-	// init_recycler(game);
 	expand(game, direction, spawnHeight);
 
 	game.execute_actions();
@@ -814,7 +942,15 @@ int main()
 	while (++turn)
 	{
 		game.read_inputs();
-		expand(game, direction, spawnHeight);
+		if (mode == EXPAND)
+		{
+			if (isAllIsolate(game))
+				mode = SPLATOON;
+			else
+				expand(game, direction, spawnHeight);
+		}
+		else if (mode == SPLATOON)
+			splatoon(game);
 		game.execute_actions();
 	}
 }
