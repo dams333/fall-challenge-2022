@@ -326,6 +326,7 @@ public:
 	bool is_in(Case c);
 	void addCaseAndNeighbours(Game &game, Case &c);
 	void buildFrom(Game &game, Case &c);
+	bool isIsolate();
 };
 
 /*=======================================================================
@@ -524,7 +525,7 @@ void Teritory::addCaseAndNeighbours(Game &game, Case &c)
 	add_case(c);
 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 	{
-		if (it->pos.distance(c.pos) == 1 && it->scrap_amount > 0 && !is_in(*it))
+		if (it->pos.distance(c.pos) == 1 && it->scrap_amount > 0 && it->recycler <= 0 && !is_in(*it))
 		{
 			addCaseAndNeighbours(game, *it);
 		}
@@ -536,6 +537,23 @@ void Teritory::buildFrom(Game &game, Case &c)
 	if (TERRITORY_DEBUG)
 		cerr << "Building territory from " << c.pos.x << " " << c.pos.y << endl;
 	addCaseAndNeighbours(game, c);
+}
+
+bool Teritory::isIsolate()
+{
+	Player owner = PLAYER_NONE;
+	for (auto it = cases.begin(); it != cases.end(); it++)
+	{
+		if (owner == PLAYER_NONE)
+		{
+			owner = it->owner;
+		}
+		else if (owner != it->owner && it->owner != PLAYER_NONE)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 /*=======================================================================
@@ -891,12 +909,48 @@ void expand(Game &game, int direction, int spawnHeight)
 
 void splatoon(Game &game)
 {
+	game.register_action(new ActionMessage("Splatoon"));
+	vector<Case> notMine;
+	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+	{
+		if (it->owner == PLAYER_NONE && it->scrap_amount > 0)
+		{
+			notMine.push_back(*it);
+		}
+	}
+	for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
+	{
+		if (notMine.size() > 0)
+		{
+			Position nearest = get_nearest(it->pos, notMine);
+			for (auto it2 = notMine.begin(); it2 != notMine.end(); it2++)
+			{
+				if (it2->pos == nearest)
+				{
+					notMine.erase(it2);
+					break;
+				}
+			}
+			game.register_action(new ActionMove(it->pos, nearest, 1));
+		}
+	}
 }
 
 bool isAllIsolate(Game &game)
 {
 	vector<Teritory> teritories = game.get_teritories();
-	return false;
+	for (auto it = teritories.begin(); it != teritories.end(); it++)
+	{
+		if (!it->isIsolate())
+		{
+			return false;
+		}
+		else
+		{
+			cerr << it->cases[0].pos.x << ";" << it->cases[0].pos.y << " is an isolate teritory" << endl;
+		}
+	}
+	return true;
 }
 
 /*=======================================================================
