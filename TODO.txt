@@ -3,4 +3,4 @@
 - Bot bloqués au bout de map
 - Spawn pendant le fight sur la front line
 - Pas de spawn pendant la phase splatoon
-- Refaire la phase splatoon par territoire
+- Refaire la phase splatoon par territoire: seed=-7077844673661795000
