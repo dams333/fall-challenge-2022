@@ -8,6 +8,7 @@ using namespace std;
 #define BOT_DEBUG 0
 #define INPUT_DEBUG 0
 #define RECYCLER_DEBUG 0
+#define SPAWN_DEBUG 0
 
 /*=======================================================================
 ||                                                                     ||
@@ -291,6 +292,7 @@ public:
 	Game(int width, int height);
 	void read_inputs();
 	void register_action(AAction *action);
+	void register_spawn_remove_move(ActionSpawn *action);
 	void execute_actions();
 	Case &get_case(Position pos);
 	Case &get_case(int x, int y);
@@ -399,6 +401,25 @@ Case &Game::get_case(int x, int y)
 	return get_case(Position(x, y));
 }
 
+void Game::register_spawn_remove_move(ActionSpawn *action)
+{
+	for (auto it = action_manager.actions.begin(); it != action_manager.actions.end(); it++)
+	{
+		if (dynamic_cast<ActionMove *>(*it) != NULL)
+		{
+			ActionMove *move = dynamic_cast<ActionMove *>(*it);
+			if (move->from == action->pos)
+			{
+				if (SPAWN_DEBUG)
+					cerr << "Remove move action at " << move->from.x << " " << move->from.y << endl;
+				action_manager.actions.erase(it);
+				break;
+			}
+		}
+	}
+	action_manager.addAction(this, action);
+}
+
 /*=======================================================================
 ||                                                                     ||
 ||                          Utils functions                            ||
@@ -505,6 +526,12 @@ bool isCaseUsefulForRecycler(Game &game, Position pos)
 			cerr << "on right is already recycled" << endl;
 		return false;
 	}
+	if (game.get_case(pos.x + 1, pos.y).owner == PLAYER_ME && game.get_case(pos.x - 1, pos.y).owner == PLAYER_ME && game.get_case(pos.x, pos.y + 1).owner == PLAYER_ME && game.get_case(pos.x, pos.y - 1).owner == PLAYER_ME)
+	{
+		if (RECYCLER_DEBUG)
+			cerr << "in my teritory" << endl;
+		return false;
+	}
 	if (RECYCLER_DEBUG)
 		cerr << "valid" << endl;
 	return true;
@@ -528,6 +555,32 @@ vector<Case> adajcent(Case &src, Game &game)
 	if (src.pos.y < game.height - 1)
 	{
 		result.push_back(game.get_case(src.pos.x, src.pos.y + 1));
+	}
+	return result;
+}
+
+vector<Case> not_mine_available_to_move(Game &game)
+{
+	vector<Case> result;
+	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+	{
+		if (it->owner != PLAYER_ME && it->scrap_amount > 0)
+		{
+			result.push_back(*it);
+		}
+	}
+	return result;
+}
+
+vector<Case> other_cases(Game &game)
+{
+	vector<Case> result;
+	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+	{
+		if (it->owner == PLAYER_OPPONENT)
+		{
+			result.push_back(*it);
+		}
 	}
 	return result;
 }
@@ -556,34 +609,116 @@ int main()
 	{
 		game.read_inputs();
 
-		vector<Case> not_mine;
+		vector<Case> not_mine = not_mine_available_to_move(game);
 		for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 		{
-			if (it->owner != PLAYER_ME)
+			if (it->owner == PLAYER_ME && it->units > 0)
 			{
-				not_mine.push_back(*it);
-			}
-		}
-		for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
-		{
-			if (not_mine.size() > 0)
-			{
-				Position nearest = get_nearest(it->pos, not_mine);
-				for (auto it2 = not_mine.begin(); it2 != not_mine.end(); it2++)
+				bool move = false;
+				for (auto it2 = game.opp_bots.begin(); it2 != game.opp_bots.end(); it2++)
 				{
-					if (it2->pos == nearest)
+					if (it2->pos.distance(it->pos) <= 1)
 					{
-						not_mine.erase(it2);
+						game.register_action(new ActionMove(it->pos, it2->pos, it->units));
+						move = true;
 						break;
 					}
 				}
-				game.register_action(new ActionMove(it->pos, nearest, 1));
+				if (move)
+					continue;
+				if (not_mine.size() > 0)
+				{
+					Position nearest = get_nearest(it->pos, not_mine);
+					for (auto it2 = not_mine.begin(); it2 != not_mine.end(); it2++)
+					{
+						if (it2->pos == nearest)
+						{
+							not_mine.erase(it2);
+							break;
+						}
+					}
+					game.register_action(new ActionMove(it->pos, nearest, it->units));
+				}
+				else
+					game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.cases), it->units));
 			}
-			else
-				game.register_action(new ActionMove(it->pos, get_nearest(it->pos, game.cases), 1));
 		}
 
-		if (game.my_matter >= 10)
+		// int needed = 0;
+		// while (game.my_matter >= (needed += 10))
+		// {
+		// 	vector<Case> dests;
+		// 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+		// 	{
+		// 		if (it->can_spawn)
+		// 		{
+		// 			vector<Case> adj = adajcent(*it, game);
+		// 			for (auto it2 = adj.begin(); it2 != adj.end(); it2++)
+		// 			{
+		// 				if (it2->owner != PLAYER_ME)
+		// 				{
+		// 					dests.push_back(*it);
+		// 					break;
+		// 				}
+		// 			}
+		// 		}
+		// 	}
+		// 	if (dests.size() > 0)
+		// 		game.register_action(new ActionSpawn(dests[rand() % dests.size()].pos, 1));
+		// 	else
+		// 	{
+		// 		dests.clear();
+		// 		for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+		// 		{
+		// 			if (it->can_spawn)
+		// 			{
+		// 				dests.push_back(*it);
+		// 			}
+		// 		}
+		// 		if (dests.size() > 0)
+		// 			game.register_action(new ActionSpawn(dests[rand() % dests.size()].pos, 1));
+		// 	}
+		// }
+
+		bool battle = false;
+		for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
+		{
+			Case cur = game.get_case(it->pos.x, it->pos.y);
+			vector<Case> adj = adajcent(cur, game);
+			int units = 0;
+			for (auto it2 = adj.begin(); it2 != adj.end(); it2++)
+			{
+				if (it2->owner == PLAYER_OPPONENT)
+					units += it2->units;
+			}
+			if (units > 0)
+				battle = true;
+			units = units - cur.units + 1;
+			if (units > 0 && game.my_matter >= 10 * units)
+			{
+				game.register_spawn_remove_move(new ActionSpawn(it->pos, units));
+			}
+			else if (units == 0)
+			{
+				units = 0;
+				for (auto it2 = game.opp_bots.begin(); it2 != game.opp_bots.end(); it2++)
+				{
+					if (it2->pos.distance(cur.pos) <= 3)
+					{
+						units++;
+					}
+				}
+				if (units > 0)
+					battle = true;
+				units = units - cur.units;
+				if (units > 0 && game.my_matter >= 10 * units)
+				{
+					game.register_spawn_remove_move(new ActionSpawn(it->pos, units));
+				}
+			}
+		}
+
+		if (game.my_matter >= 50)
 		{
 			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 			{
@@ -596,7 +731,7 @@ int main()
 		}
 
 		int needed = 0;
-		while (game.my_matter >= (needed += 10))
+		while (game.my_matter >= (needed += 20) && (!battle || game.my_matter > 100))
 		{
 			vector<Case> dests;
 			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
@@ -629,6 +764,11 @@ int main()
 				if (dests.size() > 0)
 					game.register_action(new ActionSpawn(dests[rand() % dests.size()].pos, 1));
 			}
+		}
+
+		if (turn == 1 && game.get_case(game.my_bots[0].pos.x, game.my_bots[0].pos.y + 1).scrap_amount >= 8)
+		{
+			game.register_action(new ActionBuildRecycler(Position(game.my_bots[0].pos.x, game.my_bots[0].pos.y + 1)));
 		}
 
 		game.execute_actions();
