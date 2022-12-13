@@ -661,6 +661,7 @@ void expand(Game &game, int direction, int spawnHeight)
 {
 	game.register_action(new ActionMessage("expand to " + to_string(direction)));
 
+	// Build recycler to block ennemy
 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 	{
 		if (it->owner == PLAYER_ME && it->can_build && game.my_matter >= 10)
@@ -676,13 +677,14 @@ void expand(Game &game, int direction, int spawnHeight)
 		}
 	}
 
+	// Parcou lignes
 	for (int h = 0; h < game.height; h++)
 	{
 		if (is_bot_on_line(game, h))
 		{
+			// Set director direction
 			Bot &director = get_most_advanced_on_line(game, direction, h);
 			Position target = Position(director.pos.x + direction, director.pos.y);
-			// Director try to go right straight
 			if (game.get_case(target).scrap_amount > 0 && game.get_case(target).recycler <= 0)
 				game.register_action(new ActionMove(director.pos, target, 1));
 			else
@@ -716,6 +718,7 @@ void expand(Game &game, int direction, int spawnHeight)
 					}
 				}
 			}
+			// Set other bots direction
 			for (int w = director.pos.x; w >= 0 && w < game.width; w -= direction)
 			{
 				int usable = game.get_case(w, h).owner == PLAYER_ME ? game.get_case(w, h).units : 0;
@@ -756,6 +759,7 @@ void expand(Game &game, int direction, int spawnHeight)
 					}
 				}
 			}
+			// Spawn new bot on the middle
 			if (abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1)) <= 1)
 			{
 				if (game.my_bots.size() < game.height)
