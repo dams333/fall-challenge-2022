@@ -1,4 +1,5 @@
-- Timeout sur l expansion
+- Timeout sur l expansion: seed=-3969679008681400300
+
 - Pose de recycleur ative
 - Bot bloqués au bout de map
 - Spawn pendant le fight sur la front line
