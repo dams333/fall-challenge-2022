@@ -1,4 +1,3 @@
 - Pose de recycleur ative
 - Bot bloqués au bout de map
-- Spawn pendant le fight sur la front line
 - Activer le mode splatoon plus tot: https://www.codingame.com/replay/678540545

@@ -541,6 +541,7 @@ void Teritory::buildFrom(Game &game, Case &c)
 
 bool Teritory::isIsolate()
 {
+	bool isolate = true;
 	Player owner = PLAYER_NONE;
 	for (auto it = cases.begin(); it != cases.end(); it++)
 	{
@@ -550,10 +551,10 @@ bool Teritory::isIsolate()
 		}
 		else if (owner != it->owner && it->owner != PLAYER_NONE)
 		{
-			return false;
+			isolate = false;
 		}
 	}
-	return true;
+	return isolate;
 }
 
 /*=======================================================================
@@ -812,7 +813,7 @@ void expand(Game &game, int direction, int spawnHeight)
 		}
 	}
 
-	// Parcou lignes
+	// Parcour lignes
 	for (int h = 0; h < game.height; h++)
 	{
 		if (is_bot_on_line(game, h))
@@ -863,7 +864,6 @@ void expand(Game &game, int direction, int spawnHeight)
 				}
 				if (usable > 0)
 				{
-					int heightDir;
 					if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
 					{
 						// More bots on the bottom, better is to go top
@@ -872,10 +872,14 @@ void expand(Game &game, int direction, int spawnHeight)
 							// There is a needed line in the top, go to top
 							game.register_action(new ActionMove(Position(w, h), Position(w, h - 1), 1));
 						}
-						else
+						else if (is_line_with_no_bot_in(game, h, 1))
 						{
 							// There is no needed line in the top, go to bottom
 							game.register_action(new ActionMove(Position(w, h), Position(w, h + 1), 1));
+						}
+						else
+						{
+							game.register_action(new ActionMove(Position(w, h), Position(w, h + direction), 1));
 						}
 					}
 					else
@@ -886,10 +890,14 @@ void expand(Game &game, int direction, int spawnHeight)
 							// There is a needed line in the bottom, go to bottom
 							game.register_action(new ActionMove(Position(w, h), Position(w, h + 1), 1));
 						}
-						else
+						else if (is_line_with_no_bot_in(game, h, -1))
 						{
 							// There is no needed line in the bottom, go to top
 							game.register_action(new ActionMove(Position(w, h), Position(w, h - 1), 1));
+						}
+						else
+						{
+							game.register_action(new ActionMove(Position(w, h), Position(w, h + direction), 1));
 						}
 					}
 				}
@@ -901,6 +909,17 @@ void expand(Game &game, int direction, int spawnHeight)
 				{
 					game.register_action(new ActionSpawn(director.pos, 1));
 				}
+			}
+		}
+	}
+	if (game.my_bots.size() == 0)
+	{
+		for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+		{
+			if (it->owner == PLAYER_ME && it->units > 0)
+			{
+				game.register_action(new ActionSpawn(it->pos, game.my_matter / 10));
+				break;
 			}
 		}
 	}
