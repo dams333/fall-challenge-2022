@@ -457,7 +457,7 @@ vector<Teritory> Game::get_teritories()
 
 	for (auto it = cases.begin(); it != cases.end(); it++)
 	{
-		if (it->scrap_amount > 0)
+		if (it->scrap_amount > 0 && it->recycler <= 0)
 		{
 			bool found = false;
 			for (auto it2 = territories.begin(); it2 != territories.end(); it2++)
@@ -562,8 +562,7 @@ bool Teritory::isIsolate()
 ||                                                                     ||
 =======================================================================*/
 
-Position
-get_nearest(Position from, vector<Bot> targets)
+Position get_nearest(Position from, vector<Bot> targets)
 {
 	if (targets.size() == 0)
 	{
@@ -918,20 +917,42 @@ void splatoon(Game &game)
 			notMine.push_back(*it);
 		}
 	}
-	for (auto it = game.my_bots.begin(); it != game.my_bots.end(); it++)
+	vector<Bot> myBots = game.my_bots;
+	for (auto it = notMine.begin(); it != notMine.end(); it++)
 	{
-		if (notMine.size() > 0)
+		if (myBots.size() == 0)
+			break;
+		Position closest = get_nearest(it->pos, myBots);
+		game.register_action(new ActionMove(closest, it->pos, 1));
+		for (auto it2 = myBots.begin(); it2 != myBots.end(); it2++)
 		{
-			Position nearest = get_nearest(it->pos, notMine);
-			for (auto it2 = notMine.begin(); it2 != notMine.end(); it2++)
+			if (it2->pos == closest)
 			{
-				if (it2->pos == nearest)
-				{
-					notMine.erase(it2);
-					break;
-				}
+				myBots.erase(it2);
+				break;
 			}
-			game.register_action(new ActionMove(it->pos, nearest, 1));
+		}
+	}
+	for (auto it = myBots.begin(); it != myBots.end(); it++)
+	{
+		Position nearest = get_nearest(it->pos, notMine);
+		game.register_action(new ActionMove(it->pos, nearest, 1));
+		for (auto it2 = notMine.begin(); it2 != notMine.end(); it2++)
+		{
+			if (it2->pos == nearest)
+			{
+				notMine.erase(it2);
+				break;
+			}
+		}
+	}
+	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+	{
+		if (game.my_matter < 10)
+			break;
+		if (it->owner == PLAYER_ME && it->units < 1)
+		{
+			game.register_action(new ActionSpawn(it->pos, 1));
 		}
 	}
 }
@@ -942,13 +963,7 @@ bool isAllIsolate(Game &game)
 	for (auto it = teritories.begin(); it != teritories.end(); it++)
 	{
 		if (!it->isIsolate())
-		{
 			return false;
-		}
-		else
-		{
-			cerr << it->cases[0].pos.x << ";" << it->cases[0].pos.y << " is an isolate teritory" << endl;
-		}
 	}
 	return true;
 }
