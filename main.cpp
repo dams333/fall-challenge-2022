@@ -795,8 +795,6 @@ bool is_line_with_no_bot_in(Game &game, int src, int direction)
 
 void expand(Game &game, int direction, int spawnHeight)
 {
-	game.register_action(new ActionMessage("expand to " + to_string(direction)));
-
 	// Build recycler to block ennemy
 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 	{
@@ -813,6 +811,8 @@ void expand(Game &game, int direction, int spawnHeight)
 		}
 	}
 
+	Position spawner;
+	int dist = 1000;
 	// Parcour lignes
 	for (int h = 0; h < game.height; h++)
 	{
@@ -903,14 +903,17 @@ void expand(Game &game, int direction, int spawnHeight)
 				}
 			}
 			// Spawn new bot on the middle
-			if (abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1)) <= 1)
+			int d = abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1));
+			if (d < dist)
 			{
-				if (game.my_bots.size() < game.height)
-				{
-					game.register_action(new ActionSpawn(director.pos, 1));
-				}
+				dist = d;
+				spawner = director.pos;
 			}
 		}
+	}
+	if (dist < 1000)
+	{
+		game.register_action(new ActionSpawn(spawner, 1));
 	}
 	if (game.my_bots.size() == 0)
 	{
@@ -927,7 +930,6 @@ void expand(Game &game, int direction, int spawnHeight)
 
 void splatoon(Game &game)
 {
-	game.register_action(new ActionMessage("Splatoon"));
 	vector<Case> notMine;
 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 	{
