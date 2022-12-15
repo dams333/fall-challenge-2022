@@ -793,6 +793,89 @@ bool is_line_with_no_bot_in(Game &game, int src, int direction)
 	return false;
 }
 
+Position move_up_down(Game &game, int h, int w, int median)
+{
+	static int last = -1;
+	if (h < median)
+	{
+		return Position(w, h + 1);
+	}
+	else if (h > median)
+	{
+		return Position(w, h - 1);
+	}
+	else
+	{
+		if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
+		{
+			// More bots on the bottom, better is to go top
+			if (is_line_with_no_bot_in(game, h, -1))
+			{
+				// There is a needed line in the top, go to top
+				return Position(w, h - 1);
+			}
+			else if (is_line_with_no_bot_in(game, h, 1))
+			{
+				// There is no needed line in the top, go to bottom
+				return Position(w, h + 1);
+			}
+			else
+			{
+				return Position(w, h + (last *= -1));
+			}
+		}
+		else
+		{
+			// More bots on the top, better is to go bottom
+			if (is_line_with_no_bot_in(game, h, 1))
+			{
+				// There is a needed line in the bottom, go to bottom
+				return Position(w, h + 1);
+			}
+			else if (is_line_with_no_bot_in(game, h, -1))
+			{
+				// There is no needed line in the bottom, go to top
+				return Position(w, h - 1);
+			}
+			else
+			{
+				return Position(w, h + (last *= -1));
+			}
+		}
+	}
+}
+
+int compute_median(Game &game, int direction)
+{
+	Position median;
+	int dist = 1000;
+	for (int h = 0; h < game.height; h++)
+	{
+		if (is_bot_on_line(game, h))
+		{
+			Bot &director = get_most_advanced_on_line(game, direction, h);
+			int d = abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1));
+			if (d < dist)
+			{
+				dist = d;
+				median = director.pos;
+			}
+		}
+	}
+	if (dist < 1000)
+		return median.y;
+	return game.height / 2;
+}
+
+Position move_to_available(Game &game, Position from, int direction)
+{
+	while (game.get_case(from).scrap_amount <= 0 || game.get_case(from).recycler > 0)
+	{
+		from = Position(from.x + direction, from.y);
+	}
+	return from;
+}
+
 void expand(Game &game, int direction, int spawnHeight)
 {
 	// Build recycler to block ennemy
@@ -811,8 +894,8 @@ void expand(Game &game, int direction, int spawnHeight)
 		}
 	}
 
-	Position spawner;
-	int dist = 1000;
+	int median = compute_median(game, direction);
+	Position spawner = Position(0, 0);
 	// Parcour lignes
 	for (int h = 0; h < game.height; h++)
 	{
@@ -820,39 +903,18 @@ void expand(Game &game, int direction, int spawnHeight)
 		{
 			// Set director direction
 			Bot &director = get_most_advanced_on_line(game, direction, h);
+			if (h == median)
+			{
+				spawner = director.pos;
+			}
 			Position target = Position(director.pos.x + direction, director.pos.y);
 			if (game.get_case(target).scrap_amount > 0 && game.get_case(target).recycler <= 0)
 				game.register_action(new ActionMove(director.pos, target, 1));
 			else
 			{
-				if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
-				{
-					// More bots on the bottom, better is to go top
-					if (is_line_with_no_bot_in(game, h, -1))
-					{
-						// There is a needed line in the top, go to top
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y - 1), 1));
-					}
-					else
-					{
-						// There is no needed line in the top, go to bottom
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y + 1), 1));
-					}
-				}
-				else
-				{
-					// More bots on the top, better is to go bottom
-					if (is_line_with_no_bot_in(game, h, 1))
-					{
-						// There is a needed line in the bottom, go to bottom
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y + 1), 1));
-					}
-					else
-					{
-						// There is no needed line in the bottom, go to top
-						game.register_action(new ActionMove(director.pos, Position(director.pos.x, director.pos.y - 1), 1));
-					}
-				}
+				target = move_up_down(game, director.pos.y, director.pos.x, median);
+				target = move_to_available(game, target, direction);
+				game.register_action(new ActionMove(director.pos, target, 1));
 			}
 			// Set other bots direction
 			for (int w = director.pos.x; w >= 0 && w < game.width; w -= direction)
@@ -864,54 +926,14 @@ void expand(Game &game, int direction, int spawnHeight)
 				}
 				if (usable > 0)
 				{
-					if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
-					{
-						// More bots on the bottom, better is to go top
-						if (is_line_with_no_bot_in(game, h, -1))
-						{
-							// There is a needed line in the top, go to top
-							game.register_action(new ActionMove(Position(w, h), Position(w, h - 1), 1));
-						}
-						else if (is_line_with_no_bot_in(game, h, 1))
-						{
-							// There is no needed line in the top, go to bottom
-							game.register_action(new ActionMove(Position(w, h), Position(w, h + 1), 1));
-						}
-						else
-						{
-							game.register_action(new ActionMove(Position(w, h), Position(w, h + direction), 1));
-						}
-					}
-					else
-					{
-						// More bots on the top, better is to go bottom
-						if (is_line_with_no_bot_in(game, h, 1))
-						{
-							// There is a needed line in the bottom, go to bottom
-							game.register_action(new ActionMove(Position(w, h), Position(w, h + 1), 1));
-						}
-						else if (is_line_with_no_bot_in(game, h, -1))
-						{
-							// There is no needed line in the bottom, go to top
-							game.register_action(new ActionMove(Position(w, h), Position(w, h - 1), 1));
-						}
-						else
-						{
-							game.register_action(new ActionMove(Position(w, h), Position(w, h + direction), 1));
-						}
-					}
+					target = move_up_down(game, h, w, median);
+					target = move_to_available(game, target, direction);
+					game.register_action(new ActionMove(Position(w, h), target, usable));
 				}
-			}
-			// Spawn new bot on the middle
-			int d = abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1));
-			if (d < dist)
-			{
-				dist = d;
-				spawner = director.pos;
 			}
 		}
 	}
-	if (dist < 1000)
+	if (median >= 0)
 	{
 		game.register_action(new ActionSpawn(spawner, game.my_matter / 10));
 	}
