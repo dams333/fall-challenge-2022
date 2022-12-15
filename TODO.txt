@@ -1,8 +1,8 @@
-- Pose de recycleur trop tot (dans mon territoir)
-- Bot bloqués a vouloir aller tout droit
+- Bot bloqués a vouloir aller tout droit: https://www.codingame.com/replay/679051045
 - Activer le mode splatoon plus tot: https://www.codingame.com/replay/678540545
 - Terriroire isolé mais pas bot ailleurs -> mode splatoon: https://www.codingame.com/replay/678593541
 - Plutot que nombre de ligne avec bot en dessous => nombre de bots en dessous => si en dessus/dessous mediane, continuer pour pas faire aller/retour: https://www.codingame.com/replay/678839121
 - Contournement: https://www.codingame.com/replay/678607092
-- poser des recycler en prio sur l horizontale
 - Spawn pendant phase expand cassé par moment: https://www.codingame.com/replay/678838603
+- Quand on a un face a face 1vs1, super dangereux d avancer: https://www.codingame.com/replay/679055921 (Frame 8, 10;7)
+- Comprendre pk TOP100_bronze est meilleur que main (/!\ correction dans main de spawn de 0)
