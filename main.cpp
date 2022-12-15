@@ -913,7 +913,7 @@ void expand(Game &game, int direction, int spawnHeight)
 	}
 	if (dist < 1000)
 	{
-		game.register_action(new ActionSpawn(spawner, 1));
+		game.register_action(new ActionSpawn(spawner, game.my_matter / 10));
 	}
 	if (game.my_bots.size() == 0)
 	{
