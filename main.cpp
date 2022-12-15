@@ -793,54 +793,43 @@ bool is_line_with_no_bot_in(Game &game, int src, int direction)
 	return false;
 }
 
-Position move_up_down(Game &game, int h, int w, int median)
+Position move_up_down(Game &game, int h, int w)
 {
 	static int last = -1;
-	if (h < median)
+	if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
 	{
-		return Position(w, h + 1);
-	}
-	else if (h > median)
-	{
-		return Position(w, h - 1);
-	}
-	else
-	{
-		if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
+		// More bots on the bottom, better is to go top
+		if (is_line_with_no_bot_in(game, h, -1))
 		{
-			// More bots on the bottom, better is to go top
-			if (is_line_with_no_bot_in(game, h, -1))
-			{
-				// There is a needed line in the top, go to top
-				return Position(w, h - 1);
-			}
-			else if (is_line_with_no_bot_in(game, h, 1))
-			{
-				// There is no needed line in the top, go to bottom
-				return Position(w, h + 1);
-			}
-			else
-			{
-				return Position(w, h + (last *= -1));
-			}
+			// There is a needed line in the top, go to top
+			return Position(w, h - 1);
+		}
+		else if (is_line_with_no_bot_in(game, h, 1))
+		{
+			// There is no needed line in the top, go to bottom
+			return Position(w, h + 1);
 		}
 		else
 		{
-			// More bots on the top, better is to go bottom
-			if (is_line_with_no_bot_in(game, h, 1))
-			{
-				// There is a needed line in the bottom, go to bottom
-				return Position(w, h + 1);
-			}
-			else if (is_line_with_no_bot_in(game, h, -1))
-			{
-				// There is no needed line in the bottom, go to top
-				return Position(w, h - 1);
-			}
-			else
-			{
-				return Position(w, h + (last *= -1));
-			}
+			return Position(w, h + (last *= -1));
+		}
+	}
+	else
+	{
+		// More bots on the top, better is to go bottom
+		if (is_line_with_no_bot_in(game, h, 1))
+		{
+			// There is a needed line in the bottom, go to bottom
+			return Position(w, h + 1);
+		}
+		else if (is_line_with_no_bot_in(game, h, -1))
+		{
+			// There is no needed line in the bottom, go to top
+			return Position(w, h - 1);
+		}
+		else
+		{
+			return Position(w, h + (last *= -1));
 		}
 	}
 }
@@ -865,15 +854,6 @@ int compute_median(Game &game, int direction)
 	if (dist < 1000)
 		return median.y;
 	return game.height / 2;
-}
-
-Position move_to_available(Game &game, Position from, int direction)
-{
-	while (game.get_case(from).scrap_amount <= 0 || game.get_case(from).recycler > 0)
-	{
-		from = Position(from.x + direction, from.y);
-	}
-	return from;
 }
 
 void expand(Game &game, int direction, int spawnHeight)
@@ -912,8 +892,7 @@ void expand(Game &game, int direction, int spawnHeight)
 				game.register_action(new ActionMove(director.pos, target, 1));
 			else
 			{
-				target = move_up_down(game, director.pos.y, director.pos.x, median);
-				target = move_to_available(game, target, direction);
+				target = move_up_down(game, director.pos.y, director.pos.x);
 				game.register_action(new ActionMove(director.pos, target, 1));
 			}
 			// Set other bots direction
@@ -926,8 +905,7 @@ void expand(Game &game, int direction, int spawnHeight)
 				}
 				if (usable > 0)
 				{
-					target = move_up_down(game, h, w, median);
-					target = move_to_available(game, target, direction);
+					target = move_up_down(game, h, w);
 					game.register_action(new ActionMove(Position(w, h), target, usable));
 				}
 			}
