@@ -414,6 +414,11 @@ void Game::read_inputs()
 
 void Game::register_action(AAction *action)
 {
+	if (dynamic_cast<ActionSpawn *>(action) != NULL)
+	{
+		if (dynamic_cast<ActionSpawn *>(action)->amount_of_units <= 0)
+			return;
+	}
 	action_manager.addAction(this, action);
 }
 
