@@ -6,6 +6,7 @@
 		"vector": "cpp",
 		"deque": "cpp",
 		"new": "cpp",
-		"ostream": "cpp"
+		"ostream": "cpp",
+		"random": "cpp"
 	}
 }

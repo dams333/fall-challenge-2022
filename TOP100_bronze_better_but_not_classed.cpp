@@ -310,7 +310,6 @@ public:
 	Case &get_case(Position pos);
 	Case &get_case(int x, int y);
 	vector<Teritory> get_teritories();
-	Bot &getBot(Position pos);
 };
 
 /*=======================================================================
@@ -321,7 +320,6 @@ class Teritory
 public:
 	vector<Case> cases;
 	Mode mode;
-	Player owner;
 	Teritory();
 	Teritory(const Teritory &t);
 	void operator=(const Teritory &t);
@@ -331,8 +329,6 @@ public:
 	void addCaseAndNeighbours(Game &game, Case &c);
 	void buildFrom(Game &game, Case &c);
 	bool isIsolate();
-	bool isIsolateWithCase();
-	vector<Bot> getBots(Game &game);
 };
 
 /*=======================================================================
@@ -341,11 +337,6 @@ public:
 ActionManager::ActionManager() {}
 void ActionManager::addAction(Game *game, AAction *action)
 {
-	if (dynamic_cast<ActionSpawn *>(action) != NULL)
-	{
-		if (dynamic_cast<ActionSpawn *>(action)->amount_of_units <= 0)
-			return;
-	}
 	game->my_matter -= action->matterRemove();
 	actions.push_back(action);
 }
@@ -498,25 +489,6 @@ vector<Teritory> Game::get_teritories()
 	return teritories;
 }
 
-Bot &Game::getBot(Position pos)
-{
-	for (auto it = my_bots.begin(); it != my_bots.end(); it++)
-	{
-		if (it->pos == pos)
-		{
-			return *it;
-		}
-	}
-	for (auto it = opp_bots.begin(); it != opp_bots.end(); it++)
-	{
-		if (it->pos == pos)
-		{
-			return *it;
-		}
-	}
-	return my_bots[0];
-}
-
 /*=======================================================================
 ||                         Territory declaration                       ||
 =======================================================================*/
@@ -578,7 +550,7 @@ void Teritory::buildFrom(Game &game, Case &c)
 bool Teritory::isIsolate()
 {
 	bool isolate = true;
-	owner = PLAYER_NONE;
+	Player owner = PLAYER_NONE;
 	for (auto it = cases.begin(); it != cases.end(); it++)
 	{
 		if (owner == PLAYER_NONE)
@@ -591,37 +563,6 @@ bool Teritory::isIsolate()
 		}
 	}
 	return isolate;
-}
-
-bool Teritory::isIsolateWithCase()
-{
-	bool isolate = true;
-	owner = PLAYER_NONE;
-	for (auto it = cases.begin(); it != cases.end(); it++)
-	{
-		if (owner == PLAYER_NONE && it->units > 0)
-		{
-			owner = it->owner;
-		}
-		else if (owner != it->owner && it->owner != PLAYER_NONE && it->units > 0)
-		{
-			isolate = false;
-		}
-	}
-	return isolate;
-}
-
-vector<Bot> Teritory::getBots(Game &game)
-{
-	vector<Bot> bots;
-	for (auto it = cases.begin(); it != cases.end(); it++)
-	{
-		if (it->units > 0)
-		{
-			bots.push_back(game.getBot(it->pos));
-		}
-	}
-	return bots;
 }
 
 /*=======================================================================
@@ -920,34 +861,22 @@ void move_top_up(Game &game, int h, Position init_pos, int quantity, int directi
 	game.register_action(new ActionMove(init_pos, dest, quantity));
 }
 
-bool is_available_for_defend(Case target)
-{
-	return target.owner == PLAYER_ME && target.scrap_amount > 0 && target.recycler == 0 && target.units == 0;
-}
-
-void expand(Game &game, int direction, vector<Bot> available)
+void expand(Game &game, int direction, int spawnHeight)
 {
 	// Build recycler to block ennemy
-	for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
+	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 	{
-		if (game.my_matter < 10)
-			break;
-		Position target = Position(it->pos.x - direction, it->pos.y);
-		if (is_available_for_defend(game.get_case(target)))
-			game.register_action(new ActionBuildRecycler(target));
-	}
-	for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
-	{
-		if (game.my_matter < 10)
-			break;
-		Position target = Position(it->pos.x, it->pos.y + 1);
-		if (is_available_for_defend(game.get_case(target)))
-			game.register_action(new ActionBuildRecycler(target));
-		if (game.my_matter < 10)
-			break;
-		target = Position(it->pos.x, it->pos.y - 1);
-		if (is_available_for_defend(game.get_case(target)))
-			game.register_action(new ActionBuildRecycler(target));
+		if (it->owner == PLAYER_ME && it->can_build && game.my_matter >= 10 && it->recycler <= 0)
+		{
+			vector<Case> adj = adajcent(*it, game);
+			for (auto it2 = adj.begin(); it2 != adj.end(); it2++)
+			{
+				if (it2->owner == PLAYER_OPPONENT && it2->units > 0)
+				{
+					game.register_action(new ActionBuildRecycler(it->pos));
+				}
+			}
+		}
 	}
 
 	Position spawner;
@@ -960,7 +889,7 @@ void expand(Game &game, int direction, vector<Bot> available)
 			// Set director direction
 			Bot &director = get_most_advanced_on_line(game, direction, h);
 			Position target = Position(director.pos.x + direction, director.pos.y);
-			if (game.get_case(target).scrap_amount > 0 && game.get_case(target).recycler <= 0 && ((game.get_case(target.x + direction, target.y).scrap_amount > 0 && game.get_case(target.x + direction, target.y).recycler <= 0) || (game.get_case(target.x, target.y + 1).scrap_amount > 0 && game.get_case(target.x, target.y + 1).recycler <= 0) || (game.get_case(target.x, target.y - 1).scrap_amount > 0 && game.get_case(target.x, target.y - 1).recycler <= 0)))
+			if (game.get_case(target).scrap_amount > 0 && game.get_case(target).recycler <= 0 && ((game.get_case(target.x, target.y + 1).scrap_amount > 0 && game.get_case(target.x, target.y + 1).recycler <= 0) || (game.get_case(target.x, target.y - 1).scrap_amount > 0 && game.get_case(target.x, target.y - 1).recycler <= 0)))
 				game.register_action(new ActionMove(director.pos, target, 1));
 			else
 			{
@@ -990,8 +919,7 @@ void expand(Game &game, int direction, vector<Bot> available)
 	}
 	if (dist < 1000)
 	{
-		if (game.my_matter >= 10)
-			game.register_action(new ActionSpawn(spawner, 1));
+		game.register_action(new ActionSpawn(spawner, 1));
 	}
 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 	{
@@ -1000,9 +928,9 @@ void expand(Game &game, int direction, vector<Bot> available)
 		if (game.my_matter < 10)
 			break;
 		bool near = is_bot_on_line(game, it->pos.y);
-		for (auto it2 = available.begin(); it2 != available.end(); it2++)
+		for (auto it2 = game.my_bots.begin(); it2 != game.my_bots.end(); it2++)
 		{
-			if (it->pos.distance(it2->pos) < 2)
+			if (it->pos.distance(it2->pos) <= 2)
 			{
 				near = true;
 				break;
@@ -1013,20 +941,20 @@ void expand(Game &game, int direction, vector<Bot> available)
 			game.register_action(new ActionSpawn(it->pos, 1));
 		}
 	}
-	if (available.size() == 0)
+	if (game.my_bots.size() == 0)
 	{
 		for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 		{
 			if (it->owner == PLAYER_ME && it->units > 0)
 			{
-				game.register_action(new ActionSpawn(it->pos, 1));
+				game.register_action(new ActionSpawn(it->pos, game.my_matter / 10));
 				break;
 			}
 		}
 	}
 }
 
-void splatoon(Game &game, vector<Bot> available)
+void splatoon(Game &game)
 {
 	vector<Case> notMine;
 	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
@@ -1036,7 +964,7 @@ void splatoon(Game &game, vector<Bot> available)
 			notMine.push_back(*it);
 		}
 	}
-	vector<Bot> myBots = available;
+	vector<Bot> myBots = game.my_bots;
 	for (auto it = notMine.begin(); it != notMine.end(); it++)
 	{
 		if (myBots.size() == 0)
@@ -1122,7 +1050,7 @@ int main()
 	int direction = myBase.x > game.width / 2 ? -1 : 1;
 	int spawnHeight = myBase.y + 1;
 
-	expand(game, direction, game.my_bots);
+	expand(game, direction, spawnHeight);
 
 	game.execute_actions();
 
@@ -1135,19 +1063,10 @@ int main()
 			if (isAllIsolate(game))
 				mode = SPLATOON;
 			else
-			{
-				vector<Teritory> teritories = game.get_teritories();
-				for (auto it = teritories.begin(); it != teritories.end(); it++)
-				{
-					if (it->isIsolateWithCase() && it->owner == PLAYER_ME)
-						splatoon(game, it->getBots(game));
-					else
-						expand(game, direction, it->getBots(game));
-				}
-			}
+				expand(game, direction, spawnHeight);
 		}
 		else if (mode == SPLATOON)
-			splatoon(game, game.my_bots);
+			splatoon(game);
 		game.execute_actions();
 	}
 }
