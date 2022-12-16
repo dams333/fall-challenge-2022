@@ -861,18 +861,37 @@ int line_with_bot_in(Game &game, int src, int direction)
 	return result;
 }
 
-bool is_line_with_no_bot_in(Game &game, int src, int direction)
+bool is_line_util(Game &game, int h, int w, int direction)
+{
+	Position target = Position(w, h);
+	while (target.x >= 0 && target.x < game.width)
+	{
+		Case &c = game.get_case(target.x, target.y);
+		if (c.scrap_amount <= 0 || c.recycler > 0)
+		{
+			break;
+		}
+		if (c.owner == PLAYER_OPPONENT)
+		{
+			return true;
+		}
+		target.x += direction;
+	}
+	return (direction == 1 && target.x > game.width / 2) || (direction == -1 && target.x < game.width / 2);
+}
+
+bool is_line_with_no_bot_in(Game &game, int src, int direction, int w)
 {
 	int available = 0;
 	for (int i = src; i >= 0 && i < game.height; i += direction)
 	{
-		if (!is_bot_on_line(game, i))
+		if (!is_bot_on_line(game, i) && is_line_util(game, i, w, direction))
 		{
 			available--;
 			if (available <= 0)
 				return true;
 		}
-		else
+		else if (i != src)
 		{
 			available += count_bot_on_line(game, i) - 1;
 		}
@@ -886,36 +905,44 @@ void move_top_up(Game &game, int h, Position init_pos, int quantity, int directi
 	if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
 	{
 		// More bots on the bottom, better is to go top
-		if (is_line_with_no_bot_in(game, h, -1))
+		if (is_line_with_no_bot_in(game, h, -1, init_pos.x))
 		{
 			// There is a needed line in the top, go to top
 			dest = Position(init_pos.x, init_pos.y - 1);
 		}
-		else
+		else if (is_line_with_no_bot_in(game, h, 1, init_pos.x))
 		{
 			// There is no needed line in the top, go to bottom
 			dest = Position(init_pos.x, init_pos.y + 1);
+		}
+		else
+		{
+			// There is no needed line in the top, go to bottom
+			dest = Position(init_pos.x + direction, init_pos.y);
 		}
 	}
 	else
 	{
 		// More bots on the top, better is to go bottom
-		if (is_line_with_no_bot_in(game, h, 1))
+		if (is_line_with_no_bot_in(game, h, 1, init_pos.x))
 		{
 			// There is a needed line in the bottom, go to bottom
 			dest = Position(init_pos.x, init_pos.y + 1);
 		}
-		else
+		else if (is_line_with_no_bot_in(game, h, -1, init_pos.x))
 		{
 			// There is no needed line in the bottom, go to top
 			dest = Position(init_pos.x, init_pos.y - 1);
 		}
+		else
+		{
+			// There is no needed line in the bottom, go to bottom
+			dest = Position(init_pos.x + direction, init_pos.y);
+		}
 	}
 	if (game.get_case(dest).recycler > 0 || game.get_case(dest).scrap_amount <= 0)
 	{
-		dest = Position(dest.x, dest.y > init_pos.y ? init_pos.y - 1 : init_pos.y + 1);
-		if (game.get_case(dest).recycler > 0 || game.get_case(dest).scrap_amount <= 0)
-			dest = Position(init_pos.x - direction, init_pos.y);
+		dest = Position(init_pos.x - direction, init_pos.y);
 	}
 	game.register_action(new ActionMove(init_pos, dest, quantity));
 }
@@ -1002,7 +1029,7 @@ void expand(Game &game, int direction, vector<Bot> available)
 		bool near = is_bot_on_line(game, it->pos.y);
 		for (auto it2 = available.begin(); it2 != available.end(); it2++)
 		{
-			if (it->pos.distance(it2->pos) < 2)
+			if (it->pos.distance(it2->pos) <= 2)
 			{
 				near = true;
 				break;
