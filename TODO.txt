@@ -7,3 +7,4 @@
 - Quand on a un face a face 1vs1, super dangereux d avancer: https://www.codingame.com/replay/679055921 (Frame 8, 10;7)
 - Comprendre pk TOP100_bronze est meilleur que main (/!\ correction dans main de spawn de 0)
 - Il faut contrer les contournements, ca fait trop mal: https://www.codingame.com/replay/679063001
+- Bots bourrés: https://www.codingame.com/replay/679070766 (en bas)

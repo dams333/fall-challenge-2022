@@ -414,11 +414,6 @@ void Game::read_inputs()
 
 void Game::register_action(AAction *action)
 {
-	if (dynamic_cast<ActionSpawn *>(action) != NULL)
-	{
-		if (dynamic_cast<ActionSpawn *>(action)->amount_of_units <= 0)
-			return;
-	}
 	action_manager.addAction(this, action);
 }
 
@@ -798,25 +793,20 @@ bool is_line_with_no_bot_in(Game &game, int src, int direction)
 	return false;
 }
 
-Position move_up_down(Game &game, int h, int w)
+void move_top_up(Game &game, int h, Position init_pos, int quantity)
 {
-	static int last = -1;
 	if (line_with_bot_in(game, h, 1) > line_with_bot_in(game, h, -1))
 	{
 		// More bots on the bottom, better is to go top
 		if (is_line_with_no_bot_in(game, h, -1))
 		{
 			// There is a needed line in the top, go to top
-			return Position(w, h - 1);
-		}
-		else if (is_line_with_no_bot_in(game, h, 1))
-		{
-			// There is no needed line in the top, go to bottom
-			return Position(w, h + 1);
+			game.register_action(new ActionMove(init_pos, Position(init_pos.x, init_pos.y - 1), quantity));
 		}
 		else
 		{
-			return Position(w, h + (last *= -1));
+			// There is no needed line in the top, go to bottom
+			game.register_action(new ActionMove(init_pos, Position(init_pos.x, init_pos.y + 1), quantity));
 		}
 	}
 	else
@@ -825,40 +815,14 @@ Position move_up_down(Game &game, int h, int w)
 		if (is_line_with_no_bot_in(game, h, 1))
 		{
 			// There is a needed line in the bottom, go to bottom
-			return Position(w, h + 1);
-		}
-		else if (is_line_with_no_bot_in(game, h, -1))
-		{
-			// There is no needed line in the bottom, go to top
-			return Position(w, h - 1);
+			game.register_action(new ActionMove(init_pos, Position(init_pos.x, init_pos.y + 1), quantity));
 		}
 		else
 		{
-			return Position(w, h + (last *= -1));
+			// There is no needed line in the bottom, go to top
+			game.register_action(new ActionMove(init_pos, Position(init_pos.x, init_pos.y - 1), quantity));
 		}
 	}
-}
-
-int compute_median(Game &game, int direction)
-{
-	Position median;
-	int dist = 1000;
-	for (int h = 0; h < game.height; h++)
-	{
-		if (is_bot_on_line(game, h))
-		{
-			Bot &director = get_most_advanced_on_line(game, direction, h);
-			int d = abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1));
-			if (d < dist)
-			{
-				dist = d;
-				median = director.pos;
-			}
-		}
-	}
-	if (dist < 1000)
-		return median.y;
-	return game.height / 2;
 }
 
 void expand(Game &game, int direction, int spawnHeight)
@@ -879,8 +843,8 @@ void expand(Game &game, int direction, int spawnHeight)
 		}
 	}
 
-	int median = compute_median(game, direction);
-	Position spawner = Position(0, 0);
+	Position spawner;
+	int dist = 1000;
 	// Parcour lignes
 	for (int h = 0; h < game.height; h++)
 	{
@@ -888,17 +852,12 @@ void expand(Game &game, int direction, int spawnHeight)
 		{
 			// Set director direction
 			Bot &director = get_most_advanced_on_line(game, direction, h);
-			if (h == median)
-			{
-				spawner = director.pos;
-			}
 			Position target = Position(director.pos.x + direction, director.pos.y);
 			if (game.get_case(target).scrap_amount > 0 && game.get_case(target).recycler <= 0)
 				game.register_action(new ActionMove(director.pos, target, 1));
 			else
 			{
-				target = move_up_down(game, director.pos.y, director.pos.x);
-				game.register_action(new ActionMove(director.pos, target, 1));
+				move_top_up(game, h, director.pos, 1);
 			}
 			// Set other bots direction
 			for (int w = director.pos.x; w >= 0 && w < game.width; w -= direction)
@@ -910,15 +869,21 @@ void expand(Game &game, int direction, int spawnHeight)
 				}
 				if (usable > 0)
 				{
-					target = move_up_down(game, h, w);
-					game.register_action(new ActionMove(Position(w, h), target, usable));
+					move_top_up(game, h, Position(w, h), usable);
 				}
+			}
+			// Spawn new bot on the middle
+			int d = abs(line_with_bot_in(game, h, 1) - line_with_bot_in(game, h, -1));
+			if (d < dist)
+			{
+				dist = d;
+				spawner = director.pos;
 			}
 		}
 	}
-	if (median >= 0)
+	if (dist < 1000)
 	{
-		game.register_action(new ActionSpawn(spawner, game.my_matter / 10));
+		game.register_action(new ActionSpawn(spawner, 1));
 	}
 	if (game.my_bots.size() == 0)
 	{
