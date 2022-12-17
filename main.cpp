@@ -1277,6 +1277,23 @@ int count_line(Game &game, Position from, int yDir)
 	return count;
 }
 
+bool is_needed_line(Game &game, Position pos, int xDir)
+{
+	while (pos.x >= 0 && pos.x < game.width)
+	{
+		if ((game.get_case(pos.x, pos.y).scrap_amount <= 0 || game.get_case(pos.x, pos.y).recycler >= 0))
+		{
+			return (xDir == 1 && pos.x >= game.width / 2) || (xDir == -1 && pos.x <= game.width / 2);
+		}
+		if (game.get_case(pos.x, pos.y).owner == PLAYER_ME)
+		{
+			return false;
+		}
+		pos.x += xDir;
+	}
+	return true;
+}
+
 void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int xDir)
 {
 	int save = xDir;
@@ -1287,7 +1304,7 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 	{
 		xDir = save;
 		spawn = saveSpawn;
-		for (int w = (xDir == 1 ? 0 : game.width - 1); w >= 0 && w < game.width; w += xDir)
+		for (int w = (xDir == 1 ? game.width - 1 : 0); w >= 0 && w < game.width; w -= xDir)
 		{
 			if (game.get_case(w, h).owner == PLAYER_ME && game.get_case(w, h).recycler <= 0)
 			{
