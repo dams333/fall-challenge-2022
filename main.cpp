@@ -107,6 +107,16 @@ public:
 	}
 };
 
+Position operator-(const Position &a, const Position &b)
+{
+	return Position(a.x - b.x, a.y - b.y);
+}
+
+Position operator+(const Position &a, const Position &b)
+{
+	return Position(a.x + b.x, a.y + b.y);
+}
+
 /*=======================================================================
 ||                                Case                                 ||
 =======================================================================*/
@@ -320,6 +330,8 @@ class Teritory
 {
 public:
 	vector<Case> cases;
+	vector<Bot> my_bots;
+	vector<Bot> opp_bots;
 	Mode mode;
 	Player owner;
 	Teritory();
@@ -329,7 +341,9 @@ public:
 	bool is_in(Position pos);
 	bool is_in(Case c);
 	void addCaseAndNeighbours(Game &game, Case &c);
+	void addCaseAndNeighbours(Game &game, Case &c, int xDir, int yDir);
 	void buildFrom(Game &game, Case &c);
+	void buildFrom(Game &game, Case &c, int xDir, int yDir);
 	bool isIsolate();
 	bool isIsolateWithCase();
 	vector<Bot> getBots(Game &game);
@@ -523,16 +537,32 @@ Bot &Game::getBot(Position pos)
 
 Teritory::Teritory() : mode(EXPAND) {}
 
-Teritory::Teritory(const Teritory &t) : cases(t.cases), mode(EXPAND) {}
+Teritory::Teritory(const Teritory &t) { *this = t; }
 
 void Teritory::operator=(const Teritory &t)
 {
 	cases = t.cases;
+	my_bots = t.my_bots;
+	opp_bots = t.opp_bots;
 }
 
 void Teritory::add_case(Case c)
 {
 	cases.push_back(c);
+	if (c.units > 0)
+	{
+		for (int i = 0; i < c.units; i++)
+		{
+			if (c.owner == PLAYER_ME)
+			{
+				my_bots.push_back(Bot(c.pos, PLAYER_ME));
+			}
+			else if (c.owner == PLAYER_OPPONENT)
+			{
+				opp_bots.push_back(Bot(c.pos, PLAYER_OPPONENT));
+			}
+		}
+	}
 }
 
 bool Teritory::is_in(Position pos)
@@ -564,11 +594,36 @@ void Teritory::addCaseAndNeighbours(Game &game, Case &c)
 	}
 }
 
+void Teritory::addCaseAndNeighbours(Game &game, Case &c, int xDir, int yDir)
+{
+	add_case(c);
+	for (auto it = game.cases.begin(); it != game.cases.end(); it++)
+	{
+		if (it->pos.distance(c.pos) == 1 && it->scrap_amount > 0 && it->recycler <= 0 && !is_in(*it))
+		{
+			if ((xDir == 1 && it->pos.x >= c.pos.x) || (xDir == -1 && it->pos.x <= c.pos.x) || (xDir == 0))
+				if ((yDir == 1 && it->pos.y >= c.pos.y) || (yDir == -1 && it->pos.y <= c.pos.y) || (yDir == 0))
+					addCaseAndNeighbours(game, *it);
+		}
+	}
+}
+
 void Teritory::buildFrom(Game &game, Case &c)
 {
 	if (TERRITORY_DEBUG)
 		cerr << "Building territory from " << c.pos.x << " " << c.pos.y << endl;
 	addCaseAndNeighbours(game, c);
+	if (isIsolate())
+	{
+		mode = SPLATOON;
+	}
+}
+
+void Teritory::buildFrom(Game &game, Case &c, int xDir, int yDir)
+{
+	if (TERRITORY_DEBUG)
+		cerr << "Building territory from " << c.pos.x << " " << c.pos.y << endl;
+	addCaseAndNeighbours(game, c, xDir, yDir);
 	if (isIsolate())
 	{
 		mode = SPLATOON;
@@ -1114,6 +1169,254 @@ bool isAllIsolate(Game &game)
 	return true;
 }
 
+bool is_bot_on_line(Teritory &teritory, int height)
+{
+	for (auto it = teritory.my_bots.begin(); it != teritory.my_bots.end(); it++)
+	{
+		if (it->pos.y == height)
+		{
+			return true;
+		}
+	}
+}
+
+int count_bot_on_line(Teritory &teritory, int height)
+{
+	int result = 0;
+	for (auto it = teritory.my_bots.begin(); it != teritory.my_bots.end(); it++)
+	{
+		if (it->pos.y == height)
+		{
+			result++;
+		}
+	}
+	return result;
+}
+
+Bot &get_most_advanced_on_line(Teritory &teritory, int xDir, int height)
+{
+	vector<Bot *> onLine;
+	for (auto it = teritory.my_bots.begin(); it != teritory.my_bots.end(); it++)
+	{
+		if (it->pos.y == height)
+		{
+			onLine.push_back(&(*it));
+		}
+	}
+	if (onLine.size() == 1)
+	{
+		return *onLine.front();
+	}
+	else
+	{
+		int betterX = onLine.front()->pos.x;
+		Bot &betterBot = *onLine.front();
+		for (auto it = onLine.begin(); it != onLine.end(); it++)
+		{
+			if (xDir == 1)
+			{
+				if ((*it)->pos.x > betterX)
+				{
+					betterX = (*it)->pos.x;
+					betterBot = **it;
+				}
+			}
+			else
+			{
+				if ((*it)->pos.x < betterX)
+				{
+					betterX = (*it)->pos.x;
+					betterBot = **it;
+				}
+			}
+		}
+		return betterBot;
+	}
+}
+
+Position compute_target(Game &game, Position from, Position spawn, Position middle)
+{
+	Position offset = middle - spawn;
+	Position to = from + offset;
+	if (to.x < 0)
+	{
+		to.x = 0;
+	}
+	else if (to.x >= game.width)
+	{
+		to.x = game.width - 1;
+	}
+	if (to.y < 0)
+	{
+		to.y = 0;
+	}
+	else if (to.y >= game.height)
+	{
+		to.y = game.height - 1;
+	}
+	return to;
+}
+
+int count_bot_from(Game &game, Position from, Teritory &teritory, int yDir)
+{
+	int count = 0;
+	for (int h = from.y + yDir; h >= 0 && h < game.height; h += yDir)
+	{
+		count += count_bot_on_line(teritory, h);
+	}
+	return count;
+}
+
+int count_line(Game &game, Position from, int yDir)
+{
+	int count = 0;
+	for (int h = from.y + yDir; h >= 0 && h < game.height; h += yDir)
+	{
+		count++;
+	}
+	return count;
+}
+
+void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int xDir)
+{
+	int save = xDir;
+	Position saveSpawn = spawn;
+	vector<Bot> directors;
+	vector<Case> front_line;
+	for (int h = 0; h < game.height; h++)
+	{
+		xDir = save;
+		spawn = saveSpawn;
+		for (int w = (xDir == 1 ? 0 : game.width - 1); w >= 0 && w < game.width; w += xDir)
+		{
+			if (game.get_case(w, h).owner == PLAYER_ME && game.get_case(w, h).recycler <= 0)
+			{
+				front_line.push_back(game.get_case(w, h));
+				break;
+			}
+		}
+		if (is_bot_on_line(teritory, h))
+		{
+			Bot &director = get_most_advanced_on_line(teritory, xDir, h);
+			if ((xDir == 1 && director.pos.x > game.width / 2 + 3) || (xDir == -1 && director.pos.x < game.width / 2 - 3))
+			{
+				spawn = Position(game.width - 1 - spawn.x, game.height - 1 - spawn.y);
+				xDir *= -1;
+			}
+			directors.push_back(director);
+			Position target = compute_target(game, director.pos, spawn, middle);
+			game.register_action(new ActionMove(director.pos, target, 1));
+			for (int w = director.pos.x; w >= 0 && w < game.width; w -= xDir)
+			{
+				int usable = game.get_case(w, h).owner == PLAYER_ME ? game.get_case(w, h).units : 0;
+				Position origin = Position(w, h);
+				if (w == director.pos.x)
+				{
+					usable -= 1;
+				}
+				if (usable > 0)
+				{
+					Position botTarget = target;
+					if (count_bot_from(game, origin, teritory, -1) < count_bot_from(game, origin, teritory, 1))
+					{
+						if (count_bot_from(game, origin, teritory, -1) <= count_line(game, origin, -1))
+						{
+							botTarget = Position(origin.x, 0);
+						}
+					}
+					else
+					{
+						if (count_bot_from(game, origin, teritory, 1) <= count_line(game, origin, 1))
+						{
+							botTarget = Position(origin.x, game.height - 1);
+						}
+					}
+					if (botTarget.x < 0 || botTarget.x >= game.width || botTarget.y < 0 || botTarget.y >= game.height || botTarget == origin)
+						botTarget = target;
+					game.register_action(new ActionMove(origin, botTarget, usable));
+				}
+			}
+		}
+	}
+	if (directors.size() >= 3 && game.my_matter >= 10)
+	{
+		int dist = directors.front().pos.distance(middle);
+		Position target = directors.front().pos;
+		for (auto it = directors.begin(); it != directors.end(); it++)
+		{
+			if (it->pos.distance(middle) < dist)
+			{
+				dist = it->pos.distance(middle);
+				target = it->pos;
+			}
+		}
+		game.register_action(new ActionSpawn(target, 1));
+	}
+	for (auto it = front_line.begin(); it != front_line.end(); it++)
+	{
+		if (game.my_matter < 10)
+			break;
+		if (it->units == 0)
+		{
+			if (it->pos.distance(get_nearest(it->pos, teritory.my_bots)) >= 2)
+			{
+				game.register_action(new ActionSpawn(it->pos, 1));
+			}
+		}
+	}
+	for (auto it = teritory.my_bots.begin(); it != teritory.my_bots.end(); it++)
+	{
+		if (game.my_matter < 10)
+			break;
+		for (auto it2 = front_line.begin(); it2 != front_line.end(); it2++)
+		{
+			if (game.my_matter < 10)
+				break;
+			if (it->pos == it2->pos)
+			{
+				if (it2->units == 1)
+					game.register_action(new ActionSpawn(it->pos, 1));
+			}
+		}
+	}
+}
+
+void splatoon(Game &game, Teritory &teritory)
+{
+	vector<Case> notMine;
+	for (auto it = teritory.cases.begin(); it != teritory.cases.end(); it++)
+	{
+		if (it->owner != PLAYER_ME)
+		{
+			notMine.push_back(*it);
+		}
+	}
+	if (teritory.my_bots.size() == 0)
+	{
+		for (auto it = teritory.cases.begin(); it != teritory.cases.end(); it++)
+		{
+			if (it->owner == PLAYER_ME && it->scrap_amount > 0 && it->recycler <= 0)
+			{
+				game.register_action(new ActionSpawn(it->pos, 1));
+			}
+		}
+	}
+	vector<Bot> available = teritory.my_bots;
+	for (auto it = notMine.begin(); it != notMine.end(); it++)
+	{
+		Position bot = get_nearest(it->pos, available);
+		game.register_action(new ActionMove(bot, it->pos, 1));
+		for (auto it2 = available.begin(); it2 != available.end(); it2++)
+		{
+			if (it2->pos == bot)
+			{
+				available.erase(it2);
+				break;
+			}
+		}
+	}
+}
+
 /*=======================================================================
 ||                                                                     ||
 ||                           Main Function                             ||
@@ -1146,10 +1449,13 @@ int main()
 		}
 	}
 
-	int direction = myBase.x > game.width / 2 ? -1 : 1;
-	int spawnHeight = myBase.y + 1;
+	int xDir = myBase.x > game.width / 2 ? -1 : 1;
+	int yDir = myBase.y > game.height / 2 ? -1 : 1;
+	Position spawn = Position(myBase.x, myBase.y);
+	Position middle = Position(game.width / 2 - xDir, game.height / 2 - yDir);
 
-	expand(game, direction, game.my_bots);
+	vector<Teritory> teritories = game.get_teritories();
+	expand(game, teritories[0], spawn, middle, xDir);
 
 	game.execute_actions();
 
@@ -1157,24 +1463,41 @@ int main()
 	while (++turn)
 	{
 		game.read_inputs();
-		if (mode == EXPAND)
+
+		for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
 		{
-			if (isAllIsolate(game))
-				mode = SPLATOON;
-			else
+			if (game.my_matter < 10)
+				break;
+			Position target = Position(it->pos.x - xDir, it->pos.y);
+			if (is_available_for_defend(game.get_case(target)))
+				game.register_action(new ActionBuildRecycler(target));
+		}
+		for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
+		{
+			if (game.my_matter < 10)
+				break;
+			Position target = Position(it->pos.x, it->pos.y + 1);
+			if (is_available_for_defend(game.get_case(target)))
+				game.register_action(new ActionBuildRecycler(target));
+			if (game.my_matter < 10)
+				break;
+			target = Position(it->pos.x, it->pos.y - 1);
+			if (is_available_for_defend(game.get_case(target)))
+				game.register_action(new ActionBuildRecycler(target));
+		}
+
+		vector<Teritory> teritories = game.get_teritories();
+		for (auto it = teritories.begin(); it != teritories.end(); it++)
+		{
+			if (!it->isIsolateWithCase())
 			{
-				vector<Teritory> teritories = game.get_teritories();
-				for (auto it = teritories.begin(); it != teritories.end(); it++)
-				{
-					if (it->isIsolateWithCase() && it->owner == PLAYER_ME)
-						splatoon(game, it->getBots(game));
-					else
-						expand(game, direction, it->getBots(game));
-				}
+				expand(game, *it, spawn, middle, xDir);
+			}
+			else if (it->owner == PLAYER_ME)
+			{
+				splatoon(game, *it);
 			}
 		}
-		else if (mode == SPLATOON)
-			splatoon(game, game.my_bots);
 		game.execute_actions();
 	}
 }
