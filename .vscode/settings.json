@@ -9,6 +9,7 @@
 		"ostream": "cpp",
 		"random": "cpp",
 		"*.tcc": "cpp",
-		"functional": "cpp"
+		"functional": "cpp",
+		"iterator": "cpp"
 	}
 }
