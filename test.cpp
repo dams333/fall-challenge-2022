@@ -1674,6 +1674,7 @@ int main()
 	{
 		game.read_inputs();
 
+		// TODO Axe Y pas de recycler defensif
 		for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
 		{
 			if (game.my_matter < 10)
