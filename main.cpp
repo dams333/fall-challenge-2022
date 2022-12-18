@@ -1443,7 +1443,7 @@ bool is_line_covered(Game &game, Position from)
 	{
 		if (game.get_case(w, from.y).scrap_amount <= 0)
 			break;
-		if (game.get_case(w, from.y).owner == PLAYER_ME && game.get_case(w, from.y).units > 0)
+		if (game.get_case(w, from.y).owner == PLAYER_ME)
 		{
 			covered = true;
 			break;
@@ -1455,7 +1455,7 @@ bool is_line_covered(Game &game, Position from)
 	{
 		if (game.get_case(w, from.y).scrap_amount <= 0)
 			break;
-		if (game.get_case(w, from.y).owner == PLAYER_ME && game.get_case(w, from.y).units > 0)
+		if (game.get_case(w, from.y).owner == PLAYER_ME)
 		{
 			covered = true;
 			break;
@@ -1487,13 +1487,18 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 		{
 			Bot &director = get_most_advanced_on_line(teritory, xDir, h);
 			Position target = Position(director.pos.x + xDir, h);
-			directors.push_back(director.pos);
+			if (is_walkable(game, Position(director.pos.x - xDir, h)) && game.get_case(Position(director.pos.x - xDir, h)).owner != PLAYER_OPPONENT)
+				directors.push_back(director.pos);
 			if (!is_walkable(game, target))
+			{
 				target = Position(director.pos.x, h + (director.pos.y < middle.y ? 1 : -1));
-			if (!is_walkable(game, target) || is_line_covered(game, target))
-				target = Position(director.pos.x, h + (director.pos.y < middle.y ? -1 : 1));
-			if (!is_walkable(game, target) || is_line_covered(game, target))
-				target = Position(director.pos.x + xDir, h);
+				if (!is_walkable(game, target) || game.get_case(target).owner == PLAYER_ME)
+				{
+					target = Position(director.pos.x, h + (director.pos.y < middle.y ? -1 : 1));
+					if (!is_walkable(game, target) || game.get_case(target).owner == PLAYER_ME)
+						target = Position(director.pos.x - xDir, h);
+				}
+			}
 			game.register_action(new ActionMove(director.pos, target, 1));
 			director.pos = target;
 			for (int w = director.pos.x; w >= 0 && w < game.width; w -= xDir)
@@ -1506,32 +1511,25 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 				}
 				if (usable > 0)
 				{
-					target = Position(origin.x, h + (origin.y < middle.y ? 1 : -1));
+					target = Position(origin.x, h + dir);
 					if (!is_walkable(game, target) || is_line_covered(game, target))
-						target = Position(origin.x, h + (origin.y < middle.y ? -1 : 1));
-					if (!is_walkable(game, target) || is_line_covered(game, target))
-						target = Position(origin.x + xDir, h);
-					if (!is_walkable(game, target) || is_line_covered(game, target))
-						game.register_action(new ActionMove(origin, Position(origin.x + xDir, h + (origin.y < middle.y ? 1 : -1)), usable));
-					else
-						game.register_action(new ActionMove(origin, target, usable));
+					{
+						target = Position(origin.x, h - dir);
+						if (!is_walkable(game, target) || is_line_covered(game, target))
+						{
+							target = Position(origin.x, h + 1);
+							if (!is_walkable(game, target) || game.get_case(target).owner == PLAYER_ME)
+							{
+								target = Position(origin.x, h - 1);
+								if (!is_walkable(game, target) || game.get_case(target).owner == PLAYER_ME)
+									target = Position(origin.x + xDir, h + dir);
+							}
+						}
+					}
+					game.register_action(new ActionMove(origin, target, usable));
 				}
 			}
 		}
-	}
-	if (directors.size() > 0 && game.my_matter >= 10)
-	{
-		int dist = directors.front().distance(Position(directors.front().x, middle.y));
-		Position target = directors.front();
-		for (auto it = directors.begin(); it != directors.end(); it++)
-		{
-			if (it->distance(Position(it->x, middle.y)) < dist)
-			{
-				dist = it->distance(Position(it->x, middle.y));
-				target = *it;
-			}
-		}
-		game.register_action(new ActionSpawn(target, 1));
 	}
 	for (auto it = directors.begin(); it != directors.end(); it++)
 	{
@@ -1546,6 +1544,23 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 		target = Position(it->x, it->y - dir);
 		if (!is_line_covered(game, target))
 			game.register_action(new ActionSpawn(*it, 1));
+	}
+	if (directors.size() > 0 && game.my_matter >= 10)
+	{
+		int dist = directors.front().distance(Position(directors.front().x, middle.y));
+		Position target = directors.front();
+		for (auto it = directors.begin(); it != directors.end(); it++)
+		{
+			if (it->distance(Position(it->x, middle.y)) < dist)
+			{
+				dist = it->distance(Position(it->x, middle.y));
+				target = *it;
+			}
+		}
+		if (game.get_case(target.x, target.y + dir).owner != PLAYER_ME)
+			game.register_action(new ActionSpawn(target, 1));
+		else if (game.get_case(target.x, target.y - dir).owner != PLAYER_ME)
+			game.register_action(new ActionSpawn(target, 1));
 	}
 	for (auto it = front_line.begin(); it != front_line.end(); it++)
 	{
@@ -1659,32 +1674,13 @@ int main()
 				}
 			}
 		}
-		for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
-		{
-			if (game.my_matter < 10)
-				break;
-			Position target = Position(it->pos.x, it->pos.y + 1);
-			if (is_available_for_defend(game.get_case(target)))
-			{
-				game.register_action(new ActionBuildRecycler(target));
-				attack = true;
-			}
-			if (game.my_matter < 10)
-				break;
-			target = Position(it->pos.x, it->pos.y - 1);
-			if (is_available_for_defend(game.get_case(target)))
-			{
-				game.register_action(new ActionBuildRecycler(target));
-				attack = true;
-			}
-		}
 
 		vector<Teritory> teritories = game.get_teritories();
 		if (!isAllIsolate(game) && !attack)
 		{
 			for (auto it = game.cases.begin(); it != game.cases.end(); it++)
 			{
-				if (game.my_matter < 10)
+				if (game.my_matter < 20)
 					break;
 				if (it->owner == PLAYER_ME && it->scrap_amount >= 3 && it->recycler <= 0 && it->units == 0)
 				{
