@@ -366,6 +366,7 @@ void ActionManager::addAction(Game *game, AAction *action)
 	game->my_matter -= action->matterRemove();
 	actions.push_back(action);
 }
+
 void ActionManager::execute()
 {
 	if (actions.size() > 0)
@@ -1437,26 +1438,6 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 			}
 		}
 	}
-	// if (directors.size() > 0 && game.my_matter >= 10)
-	// {
-	// 	int dist = directors.front().distance(Position(directors.front().x, middle.y));
-	// 	Position target = directors.front();
-	// 	for (auto it = directors.begin(); it != directors.end(); it++)
-	// 	{
-	// 		if (it->distance(Position(it->x, middle.y)) < dist)
-	// 		{
-	// 			dist = it->distance(Position(it->x, middle.y));
-	// 			target = *it;
-	// 		}
-	// 	}
-	// 	if (target.x - 2 * xDir >= 0 && target.x - 2 * xDir < game.width)
-	// 	{
-	// 		if (game.get_case(target.x, target.y + dir).owner != PLAYER_ME && game.get_case(target.x - xDir, target.y + dir).owner != PLAYER_ME && game.get_case(target.x - 2 * xDir, target.y + dir).owner != PLAYER_ME)
-	// 			game.register_action(new ActionSpawn(target, 1));
-	// 		else if (game.get_case(target.x, target.y - dir).owner != PLAYER_ME && game.get_case(target.x - xDir, target.y - dir).owner != PLAYER_ME && game.get_case(target.x - 2 * xDir, target.y - dir).owner != PLAYER_ME)
-	// 			game.register_action(new ActionSpawn(target, 1));
-	// 	}
-	// }
 	for (auto it = directors.begin(); it != directors.end(); it++)
 	{
 		if (game.my_matter < 10)
