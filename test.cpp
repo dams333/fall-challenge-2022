@@ -1674,7 +1674,6 @@ int main()
 	{
 		game.read_inputs();
 
-		// TODO Axe Y pas de recycler defensif
 		for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
 		{
 			if (game.my_matter < 10)
@@ -1688,6 +1687,27 @@ int main()
 			else
 			{
 				Position target = Position(it->pos.x + xDir, it->pos.y);
+				if (is_available_for_defend(game.get_case(target)))
+				{
+					game.register_action(new ActionBuildRecycler(target));
+					attack = true;
+				}
+			}
+		}
+
+		for (auto it = game.opp_bots.begin(); it != game.opp_bots.end(); it++)
+		{
+			if (game.my_matter < 10)
+				break;
+			Position target = Position(it->pos.x, it->pos.y + 1);
+			if (is_available_for_defend(game.get_case(target)))
+			{
+				game.register_action(new ActionBuildRecycler(target));
+				attack = true;
+			}
+			else
+			{
+				Position target = Position(it->pos.x, it->pos.y - 1);
 				if (is_available_for_defend(game.get_case(target)))
 				{
 					game.register_action(new ActionBuildRecycler(target));
