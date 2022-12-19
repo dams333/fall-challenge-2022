@@ -165,16 +165,18 @@ public:
 };
 
 /*=======================================================================
-||                                 Bot                                 ||
+||                                 Bot                                 ||w
 =======================================================================*/
 class Bot
 {
 public:
 	Position pos;
+	Position from;
 	Player owner;
 	Bot(Position pos, Player owner)
 	{
 		this->pos = pos;
+		this->from = pos;
 		this->owner = owner;
 		if (BOT_DEBUG)
 			cerr << "Bot created at " << pos.x << " " << pos.y << " for: " << playerToType(owner) << endl;
@@ -186,6 +188,7 @@ public:
 	Bot &operator=(const Bot &other)
 	{
 		pos = other.pos;
+		from = other.from;
 		owner = other.owner;
 		return *this;
 	}
@@ -1311,120 +1314,6 @@ bool is_needed_line(Game &game, Position pos, int xDir)
 	return true;
 }
 
-// void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int xDir)
-// {
-// 	int save = xDir;
-// 	Position saveSpawn = spawn;
-// 	vector<Bot> directors;
-// 	vector<Case> front_line;
-// 	for (int h = 0; h < game.height; h++)
-// 	{
-// 		xDir = save;
-// 		spawn = saveSpawn;
-// 		for (int w = (xDir == 1 ? game.width - 1 : 0); w >= 0 && w < game.width; w -= xDir)
-// 		{
-// 			if (game.get_case(w, h).owner == PLAYER_ME && game.get_case(w, h).recycler <= 0)
-// 			{
-// 				front_line.push_back(game.get_case(w, h));
-// 				break;
-// 			}
-// 		}
-// 		if (is_bot_on_line(teritory, h))
-// 		{
-// 			Bot &director = get_most_advanced_on_line(teritory, xDir, h);
-// 			if ((xDir == 1 && director.pos.x > game.width / 2 + 3) || (xDir == -1 && director.pos.x < game.width / 2 - 3))
-// 			{
-// 				spawn = Position(game.width - 1 - spawn.x, game.height - 1 - spawn.y);
-// 				xDir *= -1;
-// 			}
-// 			directors.push_back(director);
-// 			Position target = compute_target(game, director.pos, spawn, middle);
-// 			game.register_action(new ActionMove(director.pos, target, 1));
-// 			for (int w = director.pos.x; w >= 0 && w < game.width; w -= xDir)
-// 			{
-// 				int usable = game.get_case(w, h).owner == PLAYER_ME ? game.get_case(w, h).units : 0;
-// 				Position origin = Position(w, h);
-// 				if (w == director.pos.x)
-// 				{
-// 					usable -= 1;
-// 				}
-// 				if (usable > 0)
-// 				{
-// 					Position botTarget = target;
-// 					if (count_bot_from(game, origin, teritory, -1) < count_bot_from(game, origin, teritory, 1))
-// 					{
-// 						if (count_bot_from(game, origin, teritory, -1) <= count_line(game, origin, -1))
-// 						{
-// 							botTarget = Position(origin.x, 0);
-// 						}
-// 					}
-// 					else
-// 					{
-// 						if (count_bot_from(game, origin, teritory, 1) <= count_line(game, origin, 1))
-// 						{
-// 							botTarget = Position(origin.x, game.height - 1);
-// 						}
-// 					}
-// 					if (botTarget.x < 0 || botTarget.x >= game.width || botTarget.y < 0 || botTarget.y >= game.height || botTarget == origin)
-// 						botTarget = target;
-// 					game.register_action(new ActionMove(origin, botTarget, usable));
-// 				}
-// 			}
-// 		}
-// 	}
-// 	for (auto it = teritory.my_bots.begin(); it != teritory.my_bots.end(); it++)
-// 	{
-// 		for (auto it2 = teritory.opp_bots.begin(); it2 != teritory.opp_bots.end(); it2++)
-// 		{
-// 			if (it->pos.distance(it2->pos) <= 1)
-// 			{
-// 				game.register_action(new ActionMove(it->pos, it2->pos, 1));
-// 			}
-// 		}
-// 	}
-// 	if (directors.size() >= 3 && game.my_matter >= 10)
-// 	{
-// 		int dist = directors.front().pos.distance(middle);
-// 		Position target = directors.front().pos;
-// 		for (auto it = directors.begin(); it != directors.end(); it++)
-// 		{
-// 			if (it->pos.distance(middle) < dist)
-// 			{
-// 				dist = it->pos.distance(middle);
-// 				target = it->pos;
-// 			}
-// 		}
-// 		game.register_action(new ActionSpawn(target, 1));
-// 	}
-// 	for (auto it = front_line.begin(); it != front_line.end(); it++)
-// 	{
-// 		if (game.my_matter < 10)
-// 			break;
-// 		if (it->units == 0)
-// 		{
-// 			if (it->pos.distance(get_nearest(it->pos, teritory.my_bots)) >= 2)
-// 			{
-// 				game.register_action(new ActionSpawn(it->pos, 1));
-// 			}
-// 		}
-// 	}
-// 	for (auto it = teritory.my_bots.begin(); it != teritory.my_bots.end(); it++)
-// 	{
-// 		if (game.my_matter < 10)
-// 			break;
-// 		for (auto it2 = front_line.begin(); it2 != front_line.end(); it2++)
-// 		{
-// 			if (game.my_matter < 10)
-// 				break;
-// 			if (it->pos == it2->pos)
-// 			{
-// 				if (it2->units == 1)
-// 					game.register_spawn_remove_move(new ActionSpawn(it->pos, 1));
-// 			}
-// 		}
-// 	}
-// }
-
 bool is_walkable(Game &game, Position pos)
 {
 	if (pos.x < 0 || pos.x >= game.width || pos.y < 0 || pos.y >= game.height)
@@ -1489,7 +1378,7 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 			Position target = Position(director.pos.x + xDir, h);
 			if (is_walkable(game, Position(director.pos.x - xDir, h)) && game.get_case(Position(director.pos.x - xDir, h)).owner != PLAYER_OPPONENT)
 				directors.push_back(director.pos);
-			if (!is_walkable(game, target))
+			if (!is_walkable(game, target) || game.get_case(target).owner == PLAYER_ME)
 			{
 				target = Position(director.pos.x, h + (director.pos.y < middle.y ? 1 : -1));
 				if (!is_walkable(game, target) || game.get_case(target).owner == PLAYER_ME)
@@ -1514,7 +1403,7 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 			{
 				int usable = game.get_case(w, h).owner == PLAYER_ME ? game.get_case(w, h).units : 0;
 				Position origin = Position(w, h);
-				if (w == director.pos.x)
+				if (w == director.from.x)
 				{
 					usable -= 1;
 				}
@@ -1548,39 +1437,52 @@ void expand(Game &game, Teritory &teritory, Position spawn, Position middle, int
 			}
 		}
 	}
-	if (directors.size() > 0 && game.my_matter >= 10)
-	{
-		int dist = directors.front().distance(Position(directors.front().x, middle.y));
-		Position target = directors.front();
-		for (auto it = directors.begin(); it != directors.end(); it++)
-		{
-			if (it->distance(Position(it->x, middle.y)) < dist)
-			{
-				dist = it->distance(Position(it->x, middle.y));
-				target = *it;
-			}
-		}
-		if (target.x - 2 * xDir >= 0 && target.x - 2 * xDir < game.width)
-		{
-			if (game.get_case(target.x, target.y + dir).owner != PLAYER_ME && game.get_case(target.x - xDir, target.y + dir).owner != PLAYER_ME && game.get_case(target.x - 2 * xDir, target.y + dir).owner != PLAYER_ME)
-				game.register_action(new ActionSpawn(target, 1));
-			else if (game.get_case(target.x, target.y - dir).owner != PLAYER_ME && game.get_case(target.x - xDir, target.y - dir).owner != PLAYER_ME && game.get_case(target.x - 2 * xDir, target.y - dir).owner != PLAYER_ME)
-				game.register_action(new ActionSpawn(target, 1));
-		}
-	}
+	// if (directors.size() > 0 && game.my_matter >= 10)
+	// {
+	// 	int dist = directors.front().distance(Position(directors.front().x, middle.y));
+	// 	Position target = directors.front();
+	// 	for (auto it = directors.begin(); it != directors.end(); it++)
+	// 	{
+	// 		if (it->distance(Position(it->x, middle.y)) < dist)
+	// 		{
+	// 			dist = it->distance(Position(it->x, middle.y));
+	// 			target = *it;
+	// 		}
+	// 	}
+	// 	if (target.x - 2 * xDir >= 0 && target.x - 2 * xDir < game.width)
+	// 	{
+	// 		if (game.get_case(target.x, target.y + dir).owner != PLAYER_ME && game.get_case(target.x - xDir, target.y + dir).owner != PLAYER_ME && game.get_case(target.x - 2 * xDir, target.y + dir).owner != PLAYER_ME)
+	// 			game.register_action(new ActionSpawn(target, 1));
+	// 		else if (game.get_case(target.x, target.y - dir).owner != PLAYER_ME && game.get_case(target.x - xDir, target.y - dir).owner != PLAYER_ME && game.get_case(target.x - 2 * xDir, target.y - dir).owner != PLAYER_ME)
+	// 			game.register_action(new ActionSpawn(target, 1));
+	// 	}
+	// }
 	for (auto it = directors.begin(); it != directors.end(); it++)
 	{
 		if (game.my_matter < 10)
 			break;
 		Position target = Position(it->x, it->y + dir);
-		if (!is_line_covered(game, target))
+		if (is_walkable(game, target) && !is_line_covered(game, target))
 		{
 			game.register_action(new ActionSpawn(*it, 1));
 			break;
 		}
 		target = Position(it->x, it->y - dir);
-		if (!is_line_covered(game, target))
+		if (is_walkable(game, target) && !is_line_covered(game, target))
 			game.register_action(new ActionSpawn(*it, 1));
+	}
+	for (auto it = teritory.my_bots.begin(); it != teritory.my_bots.end(); it++)
+	{
+		if (game.my_matter < 10)
+			break;
+		for (auto it2 = teritory.opp_bots.begin(); it2 != teritory.opp_bots.end(); it2++)
+		{
+			if (it->from.distance(it2->pos) <= 1)
+			{
+				game.register_action(new ActionSpawn(it->from, 1));
+				break;
+			}
+		}
 	}
 	for (auto it = front_line.begin(); it != front_line.end(); it++)
 	{
@@ -1684,14 +1586,13 @@ int main()
 				game.register_action(new ActionBuildRecycler(target));
 				attack = true;
 			}
-			else
+			if (game.my_matter < 10)
+				break;
+			target = Position(it->pos.x + xDir, it->pos.y);
+			if (is_available_for_defend(game.get_case(target)))
 			{
-				Position target = Position(it->pos.x + xDir, it->pos.y);
-				if (is_available_for_defend(game.get_case(target)))
-				{
-					game.register_action(new ActionBuildRecycler(target));
-					attack = true;
-				}
+				game.register_action(new ActionBuildRecycler(target));
+				attack = true;
 			}
 		}
 
@@ -1705,14 +1606,13 @@ int main()
 				game.register_action(new ActionBuildRecycler(target));
 				attack = true;
 			}
-			else
+			if (game.my_matter < 10)
+				break;
+			target = Position(it->pos.x, it->pos.y - 1);
+			if (is_available_for_defend(game.get_case(target)))
 			{
-				Position target = Position(it->pos.x, it->pos.y - 1);
-				if (is_available_for_defend(game.get_case(target)))
-				{
-					game.register_action(new ActionBuildRecycler(target));
-					attack = true;
-				}
+				game.register_action(new ActionBuildRecycler(target));
+				attack = true;
 			}
 		}
 
@@ -1730,12 +1630,19 @@ int main()
 					{
 						if (it->pos.distance(it2->pos) == 1)
 						{
-							if (it2->scrap_amount == 0 || it2->scrap_amount > it->scrap_amount)
+							if ((it2->scrap_amount == 0 || it2->scrap_amount > it->scrap_amount))
 								valid++;
+							if (it2->in_range_of_recycler)
+							{
+								valid = 0;
+								break;
+							}
 						}
 					}
 					if (valid >= 3)
+					{
 						game.register_action(new ActionBuildRecycler(it->pos));
+					}
 				}
 			}
 		}
@@ -1770,9 +1677,13 @@ int main()
 				{
 					if (game.my_matter < 10)
 						break;
+					bool spawn = game.my_bots.size() == 0;
 					if (it2->owner == PLAYER_ME && it2->scrap_amount > 0 && it2->recycler <= 0)
 					{
-						game.register_action(new ActionBuildRecycler(it2->pos));
+						if (spawn)
+							game.register_action(new ActionSpawn(it2->pos, 1));
+						else
+							game.register_action(new ActionBuildRecycler(it2->pos));
 					}
 				}
 			}
